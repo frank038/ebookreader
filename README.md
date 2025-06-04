@@ -1,5 +1,5 @@
 # ebookreader
-Simple epub reader
+Simple epub reader - free to use and modify
 
 Requirements:
 - pyqt6
