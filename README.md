@@ -17,4 +17,4 @@ Features:
 - custom background colour and text colour (in the cfgCfg.py)
 - stores the window size.
 
-(https://github.com/frank038/ebookreader/blob/main/screenshot01.jpg)
+![My image](https://github.com/frank038/ebookreader/blob/main/screenshot01.jpg)
