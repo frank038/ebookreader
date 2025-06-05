@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-# V. 0.0.1
+# V. 0.1
 
 import sys, os, json
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QDialog,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
 from PyQt6.QtGui import (QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction)
-from PyQt6.QtCore import (Qt,QUrl,QByteArray)
+from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint)
 import zipfile
 from html.parser import HTMLParser, unescape
 from PyQt6 import QtPrintSupport
@@ -15,6 +15,7 @@ from cfgCfg import *
 # MY_HOME = os.path.expanduser('~')
 # this program working directory
 curr_dir = os.getcwd()
+os.chdir(curr_dir)
 
 WINW = 1400
 WINH = 950
@@ -176,7 +177,6 @@ class dictMainWindow(QMainWindow):
         self.main_box.addLayout(self.button_box)
         #
         self.chap_btn = QComboBox()
-        self.chap_btn.currentIndexChanged.connect(self.on_chap_changed)
         self.button_box.addWidget(self.chap_btn)
         self.chap_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         #
@@ -228,12 +228,16 @@ class dictMainWindow(QMainWindow):
         self.text_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.text_edit.setReadOnly(True)
         self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignJustify))
-        self.text_edit.document().setDocumentMargin(60)
+        self.text_edit.document().setDocumentMargin(MARGINS)
         # self.text_edit.document().setIndentWidth(24)
-        self.text_edit.setTextInteractionFlags(Qt.TextInteractionFlag.LinksAccessibleByMouse)
+        self.text_edit.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse|Qt.TextInteractionFlag.LinksAccessibleByMouse)
         #
-        self.text_edit.zoomIn()
-        self.text_edit.zoomIn()
+        if PAGEZOOM > 0:
+            for i in range(PAGEZOOM):
+                self.text_edit.zoomIn()
+        elif PAGEZOOM < 0:
+            for i in range(abs(PAGEZOOM)):
+                self.text_edit.zoomOut()
         #
         if BACKGROUND and TEXTCOLOR:
             self.text_edit.setStyleSheet("background-color: {}; color: {};".format(BACKGROUND,TEXTCOLOR))
@@ -255,8 +259,12 @@ class dictMainWindow(QMainWindow):
             # load the epub into memory
             self.load_zip(_ffile)
             #
+            self.list_image_full_path = []
+            #
             if self._opf_file:
                 _parse_epub_data(self._opf_file)
+                #
+                self.load_image_full_path()
                 #
                 _info_data = "Title: {}\nCreator: {}\nDate: {}\nLanguage: {}\nSubject: {}\nCoverage: {}\nRights: {}\nPublisher: {}".format(_title,_creator,_date,_language,_subject,_coverage,_rights,_publisher)
                 self.info_btn.setToolTip(_info_data)
@@ -266,23 +274,56 @@ class dictMainWindow(QMainWindow):
                 self._load_data()
                 #
                 self._load_page(0)
+                #
+                self.chap_btn.currentIndexChanged.connect(self.on_chap_changed)
+                #
+                self.text_edit.mousePressEvent = self.on_mousePressEvent
             #
             self.pop_chap_btn()
     
     def wheelEvent(self, event):
         # to top
-        if self.text_edit.verticalScrollBar().sliderPosition() == 0:
+        if event.angleDelta().y() > 0 and self.text_edit.verticalScrollBar().sliderPosition() == 0:
             curr_idx = self.chap_btn.currentIndex()
             if curr_idx == 0:
                 return
             self.chap_btn.setCurrentIndex(curr_idx-1)
             self.text_edit.verticalScrollBar().setSliderPosition(self.text_edit.verticalScrollBar().maximum())
         # to bottom
-        elif self.text_edit.verticalScrollBar().sliderPosition() > 0:
+        elif event.angleDelta().y() < 0 and (self.text_edit.verticalScrollBar().sliderPosition() > 0 or self.text_edit.verticalScrollBar().maximum() == 0):
             curr_idx = self.chap_btn.currentIndex()
             if curr_idx == self.chap_btn.count()-1:
                 return
             self.chap_btn.setCurrentIndex(curr_idx+1)
+    
+    def on_mousePressEvent(self, event):
+        if event.type() == QEvent.Type.MouseButtonPress:
+            _pos = event.position()
+            _point = QPoint(int(_pos.x()),int(_pos.y()))
+            # external link not supported
+            #
+            _link_text_tmp = self.text_edit.anchorAt(_point).split("#")
+            if len(_link_text_tmp) > 1:
+                _link_text = "#".join(_link_text_tmp[:-1])
+            else:
+                _link_text = _link_text_tmp[0]
+            #
+            _link_text_name = os.path.basename(_link_text)
+            for el in self.input_zip.filelist:
+                if os.path.basename(el.filename) == _link_text_name:
+                    for ell in _list_pages:
+                        if os.path.basename(ell) == os.path.basename(el.filename):
+                            _link = ell
+                            _iii = self.chap_btn.count()
+                            for i in range(_iii):
+                                item_text = self.chap_btn.itemText(i)
+                                if os.path.basename(item_text) == os.path.basename(ell):
+                                    self.on_link_pressed(i)
+                                    return
+    
+    # set the page from link
+    def on_link_pressed(self, _i):
+        self.chap_btn.setCurrentIndex(_i)
     
     def on_zoom_action(self, _n):
         if _n == 1:
@@ -311,7 +352,8 @@ class dictMainWindow(QMainWindow):
         
     def on_chap_changed(self, _idx):
         self._load_page(_idx)
-
+    
+    # load and display the page in the document
     def _load_page(self, _n):
         try:
             _page_name = _list_pages[_n]
@@ -324,8 +366,12 @@ class dictMainWindow(QMainWindow):
                     if el.filename[-_llll:] == _page_name:
                         _page = self.input_zip.read(el.filename).decode()
                         break
-            #
+            # remove the entity block
             _tmp = self.replace_text(_page)
+            # replace the image link with their full path
+            _ret = self.replace_text_images(_tmp)
+            if _ret != None:
+                _tmp = _ret
             self.text_edit.setHtml(_tmp)
             self.text_edit.verticalScrollBar().setSliderPosition(0)
             if _n == 0:
@@ -333,10 +379,77 @@ class dictMainWindow(QMainWindow):
             else:
                 self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignJustify))
         except Exception as E:
-            print(str(E))
+            print("LOAD PAGE: ", str(E))
             
+    # create a list of all images with full path
+    def load_image_full_path(self):
+        _zip_files = self.input_zip.filelist
+        for el in _list_images:
+            img_name = os.path.basename(el)
+            _l = len(img_name)
+            for ell in _zip_files:
+                if ell.filename[-_l:] == img_name:
+                    self.list_image_full_path.append(ell.filename)
+                    break
     
+    # replace the original image paths with their full path 
+    def replace_text_images(self, _text):
+        for _img in _list_images:
+            _img_name = os.path.basename(_img)
+            if _img_name in _text:
+                _image = _img_name
+                _pos = _text.find(_image)
+                _pos_end = _text.find('"', _pos)
+                _pos_start = None
+                i = 1
+                while 1:
+                    ret = _text.find('"', _pos-i)
+                    if _pos-i == 0:
+                        break
+                    elif ret == -1:
+                        i+=1
+                    elif ret > _pos:
+                        i+=1
+                        continue
+                    else:
+                        _pos_start = _pos-i
+                        break
+                #
+                for ell in self.list_image_full_path:
+                    if os.path.basename(ell) == _img_name:
+                        new_text = _text.replace(_text[_pos_start:_pos_end+1],ell)
+                        return new_text
+                #
+                break
+        return None
+    
+    # load and display the page
     def _load_data(self):
+        try:
+            for _img_name in self.list_image_full_path:
+                _img = self.input_zip.read(_img_name)
+                qba = QByteArray(_img)
+                _img1 = QImage()
+                _img1.loadFromData(qba)
+                if _img1.width() > self.text_edit.document().size().width():
+                    _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
+                self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name), _img1)
+        except Exception as E:
+            print("LOAD DATA: ", str(E))
+        #
+        # # css - USELESS at the moment
+        # try:
+            # _ll = len(_css)
+            # for el in self.input_zip.filelist:
+                # if el.filename[-_ll:] == _css:
+                    # _css_css = el.filename
+                    # file_css = self.input_zip.read(_css_css).decode()
+                    # break
+        # except Exception as E:
+            # print("LOAD CSS: ", str(E))
+    
+    # OLD
+    def _load_data1(self):
         try:
             _base_path = ""
             # images
@@ -370,9 +483,11 @@ class dictMainWindow(QMainWindow):
                     qba = QByteArray(_img)
                     _img1 = QImage()
                     _img1.loadFromData(qba)
+                    if _img1.width() > self.text_edit.document().size().width():
+                        _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
                     self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name), _img1)
         except Exception as E:
-            print(str(E))
+            print("LOAD DATA: ", str(E))
             pass
         # css
         try:
@@ -383,8 +498,9 @@ class dictMainWindow(QMainWindow):
                     file_css = self.input_zip.read(_css_css).decode()
                     break
         except Exception as E:
-            print(str(E))
+            print("LOAD CSS: ", str(E))
         
+    # load the epub in memory
     def load_zip(self, _epub):
         self.input_zip = zipfile.ZipFile(_epub, mode="r")
         zip_list = self.input_zip.filelist
