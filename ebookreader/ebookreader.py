@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.1
+# V. 0.1.1
 
 import sys, os, json
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QDialog,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
@@ -277,7 +277,7 @@ class dictMainWindow(QMainWindow):
                 #
                 self.chap_btn.currentIndexChanged.connect(self.on_chap_changed)
                 #
-                self.text_edit.mousePressEvent = self.on_mousePressEvent
+                self.text_edit.mouseReleaseEvent = self.on_mouseReleaseEvent
             #
             self.pop_chap_btn()
     
@@ -296,30 +296,32 @@ class dictMainWindow(QMainWindow):
                 return
             self.chap_btn.setCurrentIndex(curr_idx+1)
     
-    def on_mousePressEvent(self, event):
-        if event.type() == QEvent.Type.MouseButtonPress:
-            _pos = event.position()
-            _point = QPoint(int(_pos.x()),int(_pos.y()))
-            # external link not supported
-            #
-            _link_text_tmp = self.text_edit.anchorAt(_point).split("#")
-            if len(_link_text_tmp) > 1:
-                _link_text = "#".join(_link_text_tmp[:-1])
-            else:
-                _link_text = _link_text_tmp[0]
-            #
-            _link_text_name = os.path.basename(_link_text)
-            for el in self.input_zip.filelist:
-                if os.path.basename(el.filename) == _link_text_name:
-                    for ell in _list_pages:
-                        if os.path.basename(ell) == os.path.basename(el.filename):
-                            _link = ell
-                            _iii = self.chap_btn.count()
-                            for i in range(_iii):
-                                item_text = self.chap_btn.itemText(i)
-                                if os.path.basename(item_text) == os.path.basename(ell):
-                                    self.on_link_pressed(i)
-                                    return
+    def on_mouseReleaseEvent(self, event):
+        if event.type() == QEvent.Type.MouseButtonRelease:
+            if event.button() == Qt.MouseButton.LeftButton:
+                _pos = event.position()
+                _point = QPoint(int(_pos.x()),int(_pos.y()))
+                # external link not supported
+                #
+                _link_text_tmp = self.text_edit.anchorAt(_point).split("#")
+                if len(_link_text_tmp) > 1:
+                    _link_text = "#".join(_link_text_tmp[:-1])
+                else:
+                    _link_text = _link_text_tmp[0]
+                #
+                _link_text_name = os.path.basename(_link_text)
+                for el in self.input_zip.filelist:
+                    if os.path.basename(el.filename) == _link_text_name:
+                        for ell in _list_pages:
+                            if os.path.basename(ell) == os.path.basename(el.filename):
+                                _link = ell
+                                _iii = self.chap_btn.count()
+                                for i in range(_iii):
+                                    item_text = self.chap_btn.itemText(i)
+                                    if os.path.basename(item_text) == os.path.basename(ell):
+                                        self.on_link_pressed(i)
+                                        return
+        return super().mousePressEvent(event)
     
     # set the page from link
     def on_link_pressed(self, _i):
@@ -553,6 +555,8 @@ class dictMainWindow(QMainWindow):
         return ccc
         
     def closeEvent(self, event):
+        self.input_zip.close()
+        #
         new_w = self.size().width()
         new_h = self.size().height()
         if new_w != int(WINW) or new_h != int(WINH):
