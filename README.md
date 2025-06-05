@@ -15,7 +15,8 @@ Features:
 - zoom
 - printing (of the current chapter)
 - basic epub info (just put the mouse pointer over the info button)
-- custom background colour and text colour (in the cfgCfg.py)
-- stores the window size.
+- custom background colour, text colour, margins, initial zoom level (in the cfgCfg.py)
+- clickable ebook links (not external links)
+- the window size is stored.
 
 ![My image](https://github.com/frank038/ebookreader/blob/main/screenshot01.jpg)
