@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.1.1
+# V. 0.1.2
 
 import sys, os, json
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QDialog,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
@@ -111,7 +111,9 @@ class MyHTMLParser(HTMLParser):
             _publisher = data
 
 _toc = None
-_css = None
+# the stylesheets
+# _css = None
+# _css = []
 # the ebook images
 _list_images = []
 # the real pages to read - filename with path
@@ -122,13 +124,14 @@ def _parse_epub_data(_file):
     parser = MyHTMLParser()
     parser.feed(_file)
     #
-    global _css
-    for el in manifest_list:
-        if ('media-type', 'text/css') in el:
-            for ell in el:
-                if ell[0] == "href":
-                    _css = ell[1]
-                    break
+    # global _css
+    # for el in manifest_list:
+        # if ('media-type', 'text/css') in el:
+            # for ell in el:
+                # if ell[0] == "href":
+                    # # _css = ell[1]
+                    # _css.append(ell[1])
+                    # break
     # the ebook images
     for el in manifest_list:
         _is_image = 0
@@ -242,6 +245,11 @@ class dictMainWindow(QMainWindow):
         if BACKGROUND and TEXTCOLOR:
             self.text_edit.setStyleSheet("background-color: {}; color: {};".format(BACKGROUND,TEXTCOLOR))
         #
+        if FONTFAMILY:
+            _font = self.text_edit.font()
+            _font.setFamily(FONTFAMILY)
+            self.text_edit.setFont(_font)
+        #
         self.actual_search = ""
         #
         self.show()
@@ -250,6 +258,11 @@ class dictMainWindow(QMainWindow):
         self.chapter_list = []
         #
         self._opf_file = None
+        #
+        self._css = []
+        # _css file full path
+        # self._css_css = None
+        self._css_css = []
         _ffile = None
         if len(sys.argv) > 1:
             _ffile = sys.argv[1]
@@ -263,6 +276,7 @@ class dictMainWindow(QMainWindow):
             #
             if self._opf_file:
                 _parse_epub_data(self._opf_file)
+                self._parse_epub_css(self._opf_file)
                 #
                 self.load_image_full_path()
                 #
@@ -280,6 +294,20 @@ class dictMainWindow(QMainWindow):
                 self.text_edit.mouseReleaseEvent = self.on_mouseReleaseEvent
             #
             self.pop_chap_btn()
+    
+    def _parse_epub_css(self, _file):
+        parser = MyHTMLParser()
+        parser.feed(_file)
+        #
+        for el in manifest_list:
+            if ('media-type', 'text/css') in el:
+                for ell in el:
+                    if ell[0] == "href":
+                        if ell[1] not in self._css:
+                            self._css.append(ell[1])
+                        break
+        #
+        parser.close()
     
     def wheelEvent(self, event):
         # to top
@@ -374,6 +402,12 @@ class dictMainWindow(QMainWindow):
             _ret = self.replace_text_images(_tmp)
             if _ret != None:
                 _tmp = _ret
+            # replace the css path with its full path
+            if USE_STYLESHEET:
+                _ret = self.replace_text_css(_tmp)
+                if _ret != None:
+                    _tmp = _ret
+            #
             self.text_edit.setHtml(_tmp)
             self.text_edit.verticalScrollBar().setSliderPosition(0)
             if _n == 0:
@@ -419,10 +453,43 @@ class dictMainWindow(QMainWindow):
                 #
                 for ell in self.list_image_full_path:
                     if os.path.basename(ell) == _img_name:
-                        new_text = _text.replace(_text[_pos_start:_pos_end+1],ell)
-                        return new_text
+                        if _text[_pos_start-1] == "=":
+                            new_text = _text.replace(_text[_pos_start:_pos_end+1],'"'+ell+'"')
+                            return new_text
                 #
                 break
+        return None
+    
+    # replace the original css path with its full path
+    def replace_text_css(self, _text):
+        new_text = _text
+        if self._css:
+            for _css in self._css:
+                _css_name = os.path.basename(_css)
+                if _css_name in _text:
+                    _pos = _text.find(_css_name)
+                    _pos_end = _text.find('"', _pos)
+                    _pos_start = None
+                    i = 1
+                    while 1:
+                        ret = _text.find('"', _pos-i)
+                        if _pos-i == 0:
+                            break
+                        elif ret == -1:
+                            i+=1
+                        elif ret > _pos:
+                            i+=1
+                            continue
+                        else:
+                            _pos_start = _pos-i
+                            break
+                    #
+                    if _text[_pos_start-1] == "=":
+                        for el in self._css_css:
+                            if os.path.basename(_css) == os.path.basename(el):
+                                new_text = new_text.replace(_text[_pos_start:_pos_end+1],'"'+el+'"')
+                                break
+            return new_text
         return None
     
     # load and display the page
@@ -433,72 +500,33 @@ class dictMainWindow(QMainWindow):
                 qba = QByteArray(_img)
                 _img1 = QImage()
                 _img1.loadFromData(qba)
-                if _img1.width() > self.text_edit.document().size().width():
+                if _img1.width() > self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2:
                     _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
                 self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name), _img1)
         except Exception as E:
             print("LOAD DATA: ", str(E))
         #
-        # # css - USELESS at the moment
-        # try:
-            # _ll = len(_css)
-            # for el in self.input_zip.filelist:
-                # if el.filename[-_ll:] == _css:
-                    # _css_css = el.filename
-                    # file_css = self.input_zip.read(_css_css).decode()
-                    # break
-        # except Exception as E:
-            # print("LOAD CSS: ", str(E))
-    
-    # OLD
-    def _load_data1(self):
-        try:
-            _base_path = ""
-            # images
-            for _img_name in _list_images:
-                _img_dirname = os.path.dirname(_img_name)
-                if _img_dirname:
-                    if _img_dirname == "images":
-                        _img_name2 = _img_name
-                    elif "images" in _img_dirname:
-                        _lll = _img_name.find("images/")
-                        if _lll != -1:
-                            _img_name2 = _img_name[_lll:]
-                    _img = self.input_zip.read(os.path.join(_base_path,_img_name))
-                    qba = QByteArray(_img)
-                    _img1 = QImage()
-                    _img1.loadFromData(qba)
-                    if _img1.width() > self.text_edit.document().size().width():
-                        _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
-                    self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name2), _img1)
-                #
-                else:
-                    _el = _list_pages[0]
-                    _lll = len(_el)
-                    for el in self.input_zip.filelist:
-                        if el.filename[-_lll:] == _el:
-                            _ttt = len(el.filename)
-                            _dd = el.filename[0:_ttt-_lll]
-                            _img_name2 = _dd+_img_name
-                            break
-                    _img = self.input_zip.read(_img_name2)
-                    qba = QByteArray(_img)
-                    _img1 = QImage()
-                    _img1.loadFromData(qba)
-                    if _img1.width() > self.text_edit.document().size().width():
-                        _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
-                    self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name), _img1)
-        except Exception as E:
-            print("LOAD DATA: ", str(E))
-            pass
         # css
         try:
-            _ll = len(_css)
-            for el in self.input_zip.filelist:
-                if el.filename[-_ll:] == _css:
-                    _css_css = el.filename
-                    file_css = self.input_zip.read(_css_css).decode()
-                    break
+            if self._css:
+                for _css in self._css:
+                    _css_css = None
+                    _ll = len(_css)
+                    for el in self.input_zip.filelist:
+                        if el.filename[-_ll:] == _css:
+                            _css_css = el.filename
+                            file_css = self.input_zip.read(_css_css).decode()
+                            break
+                    #
+                    if _css_css:
+                        _l = len(_css_css)
+                        _zip_files = self.input_zip.filelist
+                        for ell in _zip_files:
+                            if ell.filename[-_l:] == _css_css:
+                                # self._css_css = ell.filename
+                                self._css_css.append(ell.filename)
+                                self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(ell.filename), ell.filename)
+                                break
         except Exception as E:
             print("LOAD CSS: ", str(E))
         
