@@ -17,6 +17,7 @@ Features:
 - basic epub info (just put the mouse pointer over the info button)
 - custom background colour, text colour, margins, initial zoom level (in the cfgCfg.py)
 - clickable ebook links (not external links)
-- the window size is stored.
+- the window size is stored
+- custom scripts on selected text.
 
 ![My image](https://github.com/frank038/ebookreader/blob/main/screenshot01.jpg)
