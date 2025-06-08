@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-# V. 0.1.4
+# V. 0.1.5
 
 import sys, os, json
+from subprocess import Popen
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
 from PyQt6.QtGui import (QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction)
 from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint)
@@ -173,46 +174,78 @@ class dictMainWindow(QMainWindow):
         #
         self.prev_btn = QPushButton()
         self.prev_btn.setIcon(QIcon().fromTheme("previous", QIcon(os.path.join(curr_dir, "icons", "previous.png"))))
-        self.prev_btn.setToolTip("Previous chapter")
+        self.prev_btn.setToolTip("Previous page")
         self.button_box.addWidget(self.prev_btn)
         self.prev_btn.clicked.connect(lambda:self.on_change_page(-1))
         #
         self.next_btn = QPushButton()
         self.next_btn.setIcon(QIcon().fromTheme("next", QIcon(os.path.join(curr_dir, "icons", "next.png"))))
-        self.next_btn.setToolTip("Next chapter")
+        self.next_btn.setToolTip("Next page")
         self.button_box.addWidget(self.next_btn)
         self.next_btn.clicked.connect(lambda:self.on_change_page(1))
         #
         self.zoom_in_btn = QPushButton()
         self.zoom_in_btn.setIcon(QIcon().fromTheme("zoom-in", QIcon(os.path.join(curr_dir, "icons", "zoom-in.png"))))
-        self.zoom_in_btn.setToolTip("Increase text size")
+        self.zoom_in_btn.setToolTip("Increase the text size")
         self.button_box.addWidget(self.zoom_in_btn)
         self.zoom_in_btn.clicked.connect(lambda:self.on_zoom_action(1))
         #
         self.zoom_out_btn = QPushButton()
         self.zoom_out_btn.setIcon(QIcon().fromTheme("zoom-out", QIcon(os.path.join(curr_dir, "icons", "zoom-out.png"))))
-        self.zoom_out_btn.setToolTip("Decrease text size")
+        self.zoom_out_btn.setToolTip("Decrease the text size")
         self.button_box.addWidget(self.zoom_out_btn)
         self.zoom_out_btn.clicked.connect(lambda:self.on_zoom_action(-1))
         #
-        self.print_btn = QPushButton()
-        self.print_btn.setIcon(QIcon().fromTheme("stock_print", QIcon(os.path.join(curr_dir, "icons", "document-print.png"))))
-        self.print_btn.setToolTip("Print")
-        self.button_box.addWidget(self.print_btn)
-        self.print_btn.clicked.connect(self.on_print)
+        self.menu_btn = QPushButton()
+        self.menu_btn.setIcon(QIcon(os.path.join(curr_dir,"icons/gear.png")))
+        self.menu_in_btn = QMenu()
+        self.menu_btn.setMenu(self.menu_in_btn)
+        self.button_box.addWidget(self.menu_btn)
+        #lambda checked, item=name:
+        # custom action
+        if CUSTOM_ACTIONS != []:
+            for el in CUSTOM_ACTIONS:
+                _name = el[0]
+                _action = el[1]
+                _caction = QAction(_name, self)
+                if el[2] != "":
+                    _caction.setIcon( QIcon(os.path.join(curr_dir, "custom_actions", el[2])) )
+                _caction.triggered.connect( lambda checked, item=_action: self.on_cation(item) )
+                self.menu_in_btn.addAction(_caction)
+            self.menu_in_btn.addSeparator()
         #
-        self.info_btn = QPushButton()
-        self.info_btn.setIcon(QIcon(os.path.join(curr_dir,"icons/information.png")))
-        # self.info_btn.setToolTip("Epub info")
-        self.button_box.addWidget(self.info_btn)
-        self.info_btn.setFlat(True)
-        # self.info_btn.clicked.connect(self.on_info)
+        self._action_info = QAction( QIcon(os.path.join(curr_dir,"icons/information.png")), "Epub info" )
+        self.menu_in_btn.addAction(self._action_info)
+        self._action_info.triggered.connect(self.on_info)
         #
-        self.exit_btn = QPushButton()
-        self.exit_btn.setIcon(QIcon().fromTheme("application-exit", QIcon(os.path.join(curr_dir, "icons", "exit.png"))))
-        self.exit_btn.setToolTip("Close")
-        self.button_box.addWidget(self.exit_btn)
-        self.exit_btn.clicked.connect(self.close)
+        self._action_print = QAction(QIcon().fromTheme("stock_print", QIcon(os.path.join(curr_dir, "icons", "document-print.png"))),"Print")
+        self.menu_in_btn.addAction(self._action_print)
+        self._action_print.triggered.connect(self.on_print)
+        #
+        self.menu_in_btn.addSeparator()
+        #
+        self._action_exit = QAction(QIcon().fromTheme("application-exit", QIcon().fromTheme("application-exit", QIcon(os.path.join(curr_dir, "icons", "exit.png")))),"Exit")
+        self.menu_in_btn.addAction(self._action_exit)
+        self._action_exit.triggered.connect(self.close)
+        #
+        # self.print_btn = QPushButton()
+        # self.print_btn.setIcon(QIcon().fromTheme("stock_print", QIcon(os.path.join(curr_dir, "icons", "document-print.png"))))
+        # self.print_btn.setToolTip("Print")
+        # self.button_box.addWidget(self.print_btn)
+        # self.print_btn.clicked.connect(self.on_print)
+        #
+        # self.info_btn = QPushButton()
+        # self.info_btn.setIcon(QIcon(os.path.join(curr_dir,"icons/information.png")))
+        # # self.info_btn.setToolTip("Epub info")
+        # self.button_box.addWidget(self.info_btn)
+        # self.info_btn.setFlat(True)
+        # # self.info_btn.clicked.connect(self.on_info)
+        #
+        # self.exit_btn = QPushButton()
+        # self.exit_btn.setIcon(QIcon().fromTheme("application-exit", QIcon(os.path.join(curr_dir, "icons", "exit.png"))))
+        # self.exit_btn.setToolTip("Close")
+        # self.button_box.addWidget(self.exit_btn)
+        # self.exit_btn.clicked.connect(self.close)
         #
         self.text_edit = QTextEdit()
         self.main_box.addWidget(self.text_edit)
@@ -268,8 +301,8 @@ class dictMainWindow(QMainWindow):
                 #
                 self.load_image_full_path()
                 #
-                _info_data = "Title: {}\nCreator: {}\nDate: {}\nLanguage: {}\nSubject: {}\nCoverage: {}\nRights: {}\nPublisher: {}".format(_title,_creator,_date,_language,_subject,_coverage,_rights,_publisher)
-                self.info_btn.setToolTip(_info_data)
+                self._info_data = "Title: {}\nCreator: {}\nDate: {}\nLanguage: {}\nSubject: {}\nCoverage: {}\nRights: {}\nPublisher: {}".format(_title,_creator,_date,_language,_subject,_coverage,_rights,_publisher)
+                # self.info_btn.setToolTip(_info_data)
                 #
                 if _title:
                     self.setWindowTitle(_title)
@@ -362,8 +395,16 @@ class dictMainWindow(QMainWindow):
             self.text_edit.print(_printer)
     
     def on_info(self):
-        pass
+        MyDialog("Epub infos", self._info_data, self)
     
+    def on_cation(self, _action):
+        try:
+            _sel = self.text_edit.textCursor().selection().toPlainText()
+            if _sel:
+                Popen([os.path.join(curr_dir, "custom_actions",_action), _sel, " &"])
+        except Exception as E:
+            MyDialog("Error", str(E), self)
+        
     def pop_chap_btn(self):
         self.chap_btn.clear()
         self.chap_btn.addItems(_list_pages)
@@ -603,15 +644,18 @@ class dictMainWindow(QMainWindow):
 class MyDialog(QMessageBox):
     def __init__(self, *args):
         super(MyDialog, self).__init__(args[-1])
-        if args[0] == "Info":
-            self.setIcon(QMessageBox.Icon.Information)
-            self.setStandardButtons(QMessageBox.StandardButton.Ok)
-        elif args[0] == "Error":
+        if args[0] == "Error":
             self.setIcon(QMessageBox.Icon.Critical)
             self.setStandardButtons(QMessageBox.StandardButton.Ok)
         elif args[0] == "Question":
             self.setIcon(QMessageBox.Icon.Question)
             self.setStandardButtons(QMessageBox.StandardButton.Ok|QMessageBox.StandardButton.Cancel)
+        elif args[0] == "Info":
+            self.setIcon(QMessageBox.Icon.Information)
+            self.setStandardButtons(QMessageBox.StandardButton.Ok)
+        else:
+            self.setStandardButtons(QMessageBox.StandardButton.Ok)
+        #
         self.setWindowIcon(QIcon(os.path.join(curr_dir,"icons/dialog.png")))
         self.setWindowTitle(args[0])
         self.resize(50,50)
