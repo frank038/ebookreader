@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-# V. 0.1.3
+# V. 0.1.4
 
 import sys, os, json
-from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QDialog,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
+from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
 from PyQt6.QtGui import (QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction)
 from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint)
 import zipfile
@@ -271,7 +271,10 @@ class dictMainWindow(QMainWindow):
                 _info_data = "Title: {}\nCreator: {}\nDate: {}\nLanguage: {}\nSubject: {}\nCoverage: {}\nRights: {}\nPublisher: {}".format(_title,_creator,_date,_language,_subject,_coverage,_rights,_publisher)
                 self.info_btn.setToolTip(_info_data)
                 #
-                self.setWindowTitle(_title)
+                if _title:
+                    self.setWindowTitle(_title)
+                else:
+                    self.setWindowTitle(os.path.basename(_ffile))
                 #
                 self._load_data()
                 #
@@ -280,8 +283,11 @@ class dictMainWindow(QMainWindow):
                 self.chap_btn.currentIndexChanged.connect(self.on_chap_changed)
                 #
                 self.text_edit.mouseReleaseEvent = self.on_mouseReleaseEvent
-            #
-            self.pop_chap_btn()
+                #
+                self.pop_chap_btn()
+            else:
+                MyDialog("Info", "Missed files in the epub.", self)
+                self.on_close()
     
     def _parse_epub_css(self, _file):
         parser = MyHTMLParser()
@@ -403,7 +409,8 @@ class dictMainWindow(QMainWindow):
             else:
                 self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignJustify))
         except Exception as E:
-            print("LOAD PAGE: ", str(E))
+            # print("LOAD PAGE: ", str(E))
+            MyDialog("Error", str(E), self)
             
     # create a list of all images with full path
     def load_image_full_path(self):
@@ -492,7 +499,8 @@ class dictMainWindow(QMainWindow):
                     _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
                 self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name), _img1)
         except Exception as E:
-            print("LOAD DATA: ", str(E))
+            # print("LOAD DATA: ", str(E))
+            MyDialog("Error", str(E), self)
         #
         # css
         if USE_STYLESHEET:
@@ -516,7 +524,8 @@ class dictMainWindow(QMainWindow):
                                     self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(ell.filename), ell.filename)
                                     break
             except Exception as E:
-                print("LOAD CSS: ", str(E))
+                # print("LOAD CSS: ", str(E))
+                MyDialog("Error", str(E), self)
         
     # load the epub in memory
     def load_zip(self, _epub):
@@ -571,6 +580,9 @@ class dictMainWindow(QMainWindow):
         return ccc
         
     def closeEvent(self, event):
+        self.on_close()
+        
+    def on_close(self):
         self.input_zip.close()
         #
         new_w = self.size().width()
@@ -581,9 +593,30 @@ class dictMainWindow(QMainWindow):
                 ifile.write("{};{}".format(new_w, new_h))
                 ifile.close()
             except Exception as E:
-                print("ERROR writing config file: ", str(E))
+                # print("ERROR writing config file: ", str(E))
+                MyDialog("Error", "ERROR writing config file:\n{}".format(str(E)), self)
         #
         QApplication.quit()
+        sys.exit()
+
+# type - message - parent
+class MyDialog(QMessageBox):
+    def __init__(self, *args):
+        super(MyDialog, self).__init__(args[-1])
+        if args[0] == "Info":
+            self.setIcon(QMessageBox.Icon.Information)
+            self.setStandardButtons(QMessageBox.StandardButton.Ok)
+        elif args[0] == "Error":
+            self.setIcon(QMessageBox.Icon.Critical)
+            self.setStandardButtons(QMessageBox.StandardButton.Ok)
+        elif args[0] == "Question":
+            self.setIcon(QMessageBox.Icon.Question)
+            self.setStandardButtons(QMessageBox.StandardButton.Ok|QMessageBox.StandardButton.Cancel)
+        self.setWindowIcon(QIcon(os.path.join(curr_dir,"icons/dialog.png")))
+        self.setWindowTitle(args[0])
+        self.resize(50,50)
+        self.setText(args[1])
+        retval = self.exec()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
