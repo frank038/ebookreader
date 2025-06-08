@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.1.2
+# V. 0.1.3
 
 import sys, os, json
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QDialog,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
@@ -111,9 +111,6 @@ class MyHTMLParser(HTMLParser):
             _publisher = data
 
 _toc = None
-# the stylesheets
-# _css = None
-# _css = []
 # the ebook images
 _list_images = []
 # the real pages to read - filename with path
@@ -123,15 +120,6 @@ _list_pages = []
 def _parse_epub_data(_file):
     parser = MyHTMLParser()
     parser.feed(_file)
-    #
-    # global _css
-    # for el in manifest_list:
-        # if ('media-type', 'text/css') in el:
-            # for ell in el:
-                # if ell[0] == "href":
-                    # # _css = ell[1]
-                    # _css.append(ell[1])
-                    # break
     # the ebook images
     for el in manifest_list:
         _is_image = 0
@@ -261,7 +249,6 @@ class dictMainWindow(QMainWindow):
         #
         self._css = []
         # _css file full path
-        # self._css_css = None
         self._css_css = []
         _ffile = None
         if len(sys.argv) > 1:
@@ -276,7 +263,8 @@ class dictMainWindow(QMainWindow):
             #
             if self._opf_file:
                 _parse_epub_data(self._opf_file)
-                self._parse_epub_css(self._opf_file)
+                if USE_STYLESHEET:
+                    self._parse_epub_css(self._opf_file)
                 #
                 self.load_image_full_path()
                 #
@@ -507,28 +495,28 @@ class dictMainWindow(QMainWindow):
             print("LOAD DATA: ", str(E))
         #
         # css
-        try:
-            if self._css:
-                for _css in self._css:
-                    _css_css = None
-                    _ll = len(_css)
-                    for el in self.input_zip.filelist:
-                        if el.filename[-_ll:] == _css:
-                            _css_css = el.filename
-                            file_css = self.input_zip.read(_css_css).decode()
-                            break
-                    #
-                    if _css_css:
-                        _l = len(_css_css)
-                        _zip_files = self.input_zip.filelist
-                        for ell in _zip_files:
-                            if ell.filename[-_l:] == _css_css:
-                                # self._css_css = ell.filename
-                                self._css_css.append(ell.filename)
-                                self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(ell.filename), ell.filename)
+        if USE_STYLESHEET:
+            try:
+                if self._css:
+                    for _css in self._css:
+                        _css_css = None
+                        _ll = len(_css)
+                        for el in self.input_zip.filelist:
+                            if el.filename[-_ll:] == _css:
+                                _css_css = el.filename
+                                file_css = self.input_zip.read(_css_css).decode()
                                 break
-        except Exception as E:
-            print("LOAD CSS: ", str(E))
+                        #
+                        if _css_css:
+                            _l = len(_css_css)
+                            _zip_files = self.input_zip.filelist
+                            for ell in _zip_files:
+                                if ell.filename[-_l:] == _css_css:
+                                    self._css_css.append(ell.filename)
+                                    self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(ell.filename), ell.filename)
+                                    break
+            except Exception as E:
+                print("LOAD CSS: ", str(E))
         
     # load the epub in memory
     def load_zip(self, _epub):
