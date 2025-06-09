@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-# V. 0.1.6
+# V. 0.2
 
 import sys, os, json
 from subprocess import Popen
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QSpinBox,QFormLayout,QTabWidget,QDialog,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
-from PyQt6.QtGui import (QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction)
-from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint)
+from PyQt6.QtGui import (QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction)
+from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint,QRect)
 import zipfile
 from html.parser import HTMLParser, unescape
 from PyQt6 import QtPrintSupport
@@ -240,6 +240,14 @@ class dictMainWindow(QMainWindow):
                 self.menu_in_btn.addAction(_caction)
             self.menu_in_btn.addSeparator()
         #
+        self._action_conf = QAction(QIcon().fromTheme("gtk-preferences", QIcon(os.path.join(curr_dir, "icons", "configurator.png"))),"Settings")
+        self.menu_in_btn.addAction(self._action_conf)
+        self._action_conf.triggered.connect(self.on_conf)
+        #
+        self._action_placeholder = QAction(QIcon().fromTheme("bookmark-new", QIcon(os.path.join(curr_dir, "icons", "bookmark-new.png"))),"Bookmark")
+        self.menu_in_btn.addAction(self._action_placeholder)
+        self._action_placeholder.triggered.connect(self.on_placeholder)
+        #
         self._action_info = QAction( QIcon(os.path.join(curr_dir,"icons/information.png")), "Epub info" )
         self.menu_in_btn.addAction(self._action_info)
         self._action_info.triggered.connect(self.on_info)
@@ -247,10 +255,6 @@ class dictMainWindow(QMainWindow):
         self._action_print = QAction(QIcon().fromTheme("stock_print", QIcon(os.path.join(curr_dir, "icons", "document-print.png"))),"Print")
         self.menu_in_btn.addAction(self._action_print)
         self._action_print.triggered.connect(self.on_print)
-        #
-        self._action_conf = QAction(QIcon().fromTheme("gtk-preferences", QIcon(os.path.join(curr_dir, "icons", "configurator.png"))),"Settings")
-        self.menu_in_btn.addAction(self._action_conf)
-        self._action_conf.triggered.connect(self.on_conf)
         #
         self.menu_in_btn.addSeparator()
         #
@@ -294,14 +298,14 @@ class dictMainWindow(QMainWindow):
         self._css = []
         # _css file full path
         self._css_css = []
-        _ffile = None
+        self._ffile = None
         # the epub in memory
         self.input_zip = None
         if len(sys.argv) > 1:
-            _ffile = sys.argv[1]
-        if _ffile and os.path.exists(os.path.realpath(_ffile)) and os.access(_ffile, os.R_OK):
+            self._ffile = os.path.realpath(sys.argv[1])
+        if self._ffile and os.path.exists(self._ffile) and os.access(self._ffile, os.R_OK):
             # load the epub into memory
-            self.load_zip(_ffile)
+            self.load_zip(self._ffile)
             #
             self.list_image_full_path = []
             #
@@ -317,21 +321,65 @@ class dictMainWindow(QMainWindow):
                 if _title:
                     self.setWindowTitle(_title)
                 else:
-                    self.setWindowTitle(os.path.basename(_ffile))
+                    self.setWindowTitle(os.path.basename(self._ffile))
                 #
                 self._load_data()
                 #
-                self._load_page(0)
+                self.pop_chap_btn()
                 #
-                self.chap_btn.currentIndexChanged.connect(self.on_chap_changed)
+                self.isStarted = False
+                #
+                # load all the placeholders
+                # full file name - page name - position startxend
+                self._placeholders = []
+                self.on_load_placeholders()
+                ## find the placeholder
+                # placeholder position
+                self.placeholder_position = ()
+                ret = self.find_placeholder()
+                if ret:
+                    self._load_page(ret)
+                    self.chap_btn.setCurrentIndex(ret)
+                    self.isStarted = True
+                else:
+                    self._load_page(0)
+                    self.isStarted = True
                 #
                 self.text_edit.mouseReleaseEvent = self.on_mouseReleaseEvent
                 #
-                self.pop_chap_btn()
+                self.chap_btn.currentIndexChanged.connect(self.on_chap_changed)
             else:
                 MyDialog("Info", "Missed files in the epub.", self)
                 self.on_close()
     
+    def on_load_placeholders(self):
+        try:
+            _tmp = None
+            with open(os.path.join(curr_dir,"placeholders", "placeholders.txt"), "r") as _f:
+                _tmp = _f.readlines()
+            i = 0
+            for el in _tmp[::3]:
+                self._placeholders.append([_tmp[i+0].strip("\n"), _tmp[i+1].strip("\n"), _tmp[i+2].strip("\n")])
+                i+=3
+        except Exception as E:
+            MyDialog("Error", str(E), self)
+    
+    def find_placeholder(self):
+        _page_name = None
+        for el in self._placeholders:
+            if el[0] == self._ffile:
+                x,y = el[2].split("x")
+                self.placeholder_position = (int(x),int(y))
+                _page_name = el[1]
+                break
+        #
+        if _page_name:
+            for i in range(self.chap_btn.count()):
+                if self.chap_btn.itemText(i) == _page_name:
+                    return i
+        else:
+            return None
+            
     def _parse_epub_css(self, _file):
         parser = MyHTMLParser()
         parser.feed(_file)
@@ -408,6 +456,54 @@ class dictMainWindow(QMainWindow):
                 _printer = dlg.printer()
                 self.text_edit.print(_printer)
     
+    # set the placeholder
+    def on_placeholder(self):
+        if self.input_zip:
+            try:
+                _file_name = self._ffile
+                _current_page = self.chap_btn.currentText()
+                _cursor = self.text_edit.textCursor()
+                _position = "{}x{}".format(_cursor.selectionStart(),_cursor.selectionEnd())
+                _found = None
+                ## searching for a previous placeholder
+                if self._placeholders:
+                    for el in self._placeholders:
+                        if el[0] == _file_name:
+                            _found = el
+                            break
+                _sel = self.text_edit.textCursor().selection().toPlainText()
+                if _sel:
+                    # a previous placeholder has been found
+                    if _found:
+                        ret = MyDialog("Question", "Do you want to remove the previous bookmark?", self)
+                        if ret.result() == QMessageBox.StandardButton.Ok:
+                            self._placeholders.remove(_found)
+                    #
+                    self._placeholders.append([_file_name,_current_page,_position])
+                    # update the file
+                    _f = open(os.path.join(curr_dir,"placeholders", "placeholders.txt"), "w")
+                    for el in self._placeholders:
+                        _f.write("{}\n{}\n{}\n".format(el[0],el[1],el[2]))
+                    _f.close()
+                    if _found:
+                        MyDialog("Info", "Bookmark changed.",self)
+                    else:
+                        MyDialog("Info", "Bookmark added.",self)
+                else:
+                    if _found:
+                        ret = MyDialog("Question", "Do you want to remove the bookmark?", self)
+                        if ret.result() == QMessageBox.StandardButton.Ok:
+                            self._placeholders.remove(_found)
+                            # update the file
+                            _f = open(os.path.join(curr_dir,"placeholders", "placeholders.txt"), "w")
+                            for el in self._placeholders:
+                                _f.write("{}\n{}\n{}\n".format(el[0],el[1],el[2]))
+                            _f.close()
+                    else:
+                        MyDialog("Info", "Select something first.", self)
+            except Exception as E:
+                MyDialog("Error", str(E), self)
+    
     def on_info(self):
         if self.input_zip:
             MyDialog("Epub infos", self._info_data, self)
@@ -465,6 +561,15 @@ class dictMainWindow(QMainWindow):
                 self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignCenter))
             else:
                 self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignJustify))
+            # set the placeholder
+            if self.isStarted == False:
+                if self.placeholder_position != ():
+                    _start = self.placeholder_position[0]
+                    _end = self.placeholder_position[1]
+                    _cursor = self.text_edit.textCursor()
+                    _cursor.setPosition(_start)
+                    _cursor.setPosition(_end, QTextCursor.MoveMode.KeepAnchor)
+                    self.text_edit.setTextCursor(_cursor)
         except Exception as E:
             MyDialog("Error", str(E), self)
             
