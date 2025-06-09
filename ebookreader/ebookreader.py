@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-# V. 0.1.5
+# V. 0.1.6
 
 import sys, os, json
 from subprocess import Popen
-from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
+from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QSpinBox,QFormLayout,QTabWidget,QDialog,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
 from PyQt6.QtGui import (QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction)
 from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint)
 import zipfile
@@ -20,6 +20,32 @@ os.chdir(curr_dir)
 
 WINW = 1400
 WINH = 950
+
+_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2}
+_config_file = os.path.join(curr_dir,"config.json")
+_settings_conf = None
+if not os.path.exists(_config_file):
+    try:
+        _ff = open(_config_file,"w")
+        _data_json = _starting_config
+        json.dump(_data_json, _ff, indent = 4)
+        _ff.close()
+        _settings_conf = _starting_config
+    except:
+        _error_log("Config file error.")
+        sys.exit()
+else:
+    _ff = open(_config_file, "r")
+    _settings_conf = json.load(_ff)
+    _ff.close()
+
+#
+BACKGROUND = _settings_conf["background"]
+TEXTCOLOR = _settings_conf["textcolor"]
+FONTFAMILY = _settings_conf["fontfamily"]
+MARGINS = _settings_conf["margins"]
+PAGEZOOM = _settings_conf["pagezoom"]
+
 try:
     with open("epubreadersize.cfg", "r") as ifile:
         fcontent = ifile.readline()
@@ -47,6 +73,7 @@ manifest_list = []
 
 # ebook pages - the page ordering
 pages_list = []
+
 
 class MyHTMLParser(HTMLParser):
     
@@ -201,7 +228,6 @@ class dictMainWindow(QMainWindow):
         self.menu_in_btn = QMenu()
         self.menu_btn.setMenu(self.menu_in_btn)
         self.button_box.addWidget(self.menu_btn)
-        #lambda checked, item=name:
         # custom action
         if CUSTOM_ACTIONS != []:
             for el in CUSTOM_ACTIONS:
@@ -222,30 +248,15 @@ class dictMainWindow(QMainWindow):
         self.menu_in_btn.addAction(self._action_print)
         self._action_print.triggered.connect(self.on_print)
         #
+        self._action_conf = QAction(QIcon().fromTheme("gtk-preferences", QIcon(os.path.join(curr_dir, "icons", "configurator.png"))),"Settings")
+        self.menu_in_btn.addAction(self._action_conf)
+        self._action_conf.triggered.connect(self.on_conf)
+        #
         self.menu_in_btn.addSeparator()
         #
         self._action_exit = QAction(QIcon().fromTheme("application-exit", QIcon().fromTheme("application-exit", QIcon(os.path.join(curr_dir, "icons", "exit.png")))),"Exit")
         self.menu_in_btn.addAction(self._action_exit)
         self._action_exit.triggered.connect(self.close)
-        #
-        # self.print_btn = QPushButton()
-        # self.print_btn.setIcon(QIcon().fromTheme("stock_print", QIcon(os.path.join(curr_dir, "icons", "document-print.png"))))
-        # self.print_btn.setToolTip("Print")
-        # self.button_box.addWidget(self.print_btn)
-        # self.print_btn.clicked.connect(self.on_print)
-        #
-        # self.info_btn = QPushButton()
-        # self.info_btn.setIcon(QIcon(os.path.join(curr_dir,"icons/information.png")))
-        # # self.info_btn.setToolTip("Epub info")
-        # self.button_box.addWidget(self.info_btn)
-        # self.info_btn.setFlat(True)
-        # # self.info_btn.clicked.connect(self.on_info)
-        #
-        # self.exit_btn = QPushButton()
-        # self.exit_btn.setIcon(QIcon().fromTheme("application-exit", QIcon(os.path.join(curr_dir, "icons", "exit.png"))))
-        # self.exit_btn.setToolTip("Close")
-        # self.button_box.addWidget(self.exit_btn)
-        # self.exit_btn.clicked.connect(self.close)
         #
         self.text_edit = QTextEdit()
         self.main_box.addWidget(self.text_edit)
@@ -284,11 +295,11 @@ class dictMainWindow(QMainWindow):
         # _css file full path
         self._css_css = []
         _ffile = None
+        # the epub in memory
+        self.input_zip = None
         if len(sys.argv) > 1:
             _ffile = sys.argv[1]
         if _ffile and os.path.exists(os.path.realpath(_ffile)) and os.access(_ffile, os.R_OK):
-            # the epub in memory
-            self.input_zip = None
             # load the epub into memory
             self.load_zip(_ffile)
             #
@@ -302,7 +313,6 @@ class dictMainWindow(QMainWindow):
                 self.load_image_full_path()
                 #
                 self._info_data = "Title: {}\nCreator: {}\nDate: {}\nLanguage: {}\nSubject: {}\nCoverage: {}\nRights: {}\nPublisher: {}".format(_title,_creator,_date,_language,_subject,_coverage,_rights,_publisher)
-                # self.info_btn.setToolTip(_info_data)
                 #
                 if _title:
                     self.setWindowTitle(_title)
@@ -388,22 +398,28 @@ class dictMainWindow(QMainWindow):
         elif _n == -1:
             self.text_edit.zoomOut()
             
+    def on_conf(self):
+        confwin = confWin(self)
+        
     def on_print(self):
-        dlg = QtPrintSupport.QPrintDialog()
-        if dlg.exec():
-            _printer = dlg.printer()
-            self.text_edit.print(_printer)
+        if self.input_zip:
+            dlg = QtPrintSupport.QPrintDialog()
+            if dlg.exec():
+                _printer = dlg.printer()
+                self.text_edit.print(_printer)
     
     def on_info(self):
-        MyDialog("Epub infos", self._info_data, self)
+        if self.input_zip:
+            MyDialog("Epub infos", self._info_data, self)
     
     def on_cation(self, _action):
-        try:
-            _sel = self.text_edit.textCursor().selection().toPlainText()
-            if _sel:
-                Popen([os.path.join(curr_dir, "custom_actions",_action), _sel, " &"])
-        except Exception as E:
-            MyDialog("Error", str(E), self)
+        if self.input_zip:
+            try:
+                _sel = self.text_edit.textCursor().selection().toPlainText()
+                if _sel:
+                    Popen([os.path.join(curr_dir, "custom_actions",_action), _sel, " &"])
+            except Exception as E:
+                MyDialog("Error", str(E), self)
         
     def pop_chap_btn(self):
         self.chap_btn.clear()
@@ -450,7 +466,6 @@ class dictMainWindow(QMainWindow):
             else:
                 self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignJustify))
         except Exception as E:
-            # print("LOAD PAGE: ", str(E))
             MyDialog("Error", str(E), self)
             
     # create a list of all images with full path
@@ -540,7 +555,6 @@ class dictMainWindow(QMainWindow):
                     _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
                 self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name), _img1)
         except Exception as E:
-            # print("LOAD DATA: ", str(E))
             MyDialog("Error", str(E), self)
         #
         # css
@@ -565,7 +579,6 @@ class dictMainWindow(QMainWindow):
                                     self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(ell.filename), ell.filename)
                                     break
             except Exception as E:
-                # print("LOAD CSS: ", str(E))
                 MyDialog("Error", str(E), self)
         
     # load the epub in memory
@@ -624,7 +637,8 @@ class dictMainWindow(QMainWindow):
         self.on_close()
         
     def on_close(self):
-        self.input_zip.close()
+        if self.input_zip:
+            self.input_zip.close()
         #
         new_w = self.size().width()
         new_h = self.size().height()
@@ -634,11 +648,124 @@ class dictMainWindow(QMainWindow):
                 ifile.write("{};{}".format(new_w, new_h))
                 ifile.close()
             except Exception as E:
-                # print("ERROR writing config file: ", str(E))
                 MyDialog("Error", "ERROR writing config file:\n{}".format(str(E)), self)
         #
         QApplication.quit()
         sys.exit()
+
+# configurator
+class confWin(QDialog):
+    def __init__(self, parent=None):
+        super(confWin, self).__init__(None)
+        self.setWindowTitle("Configurator")
+        self.setObjectName("confwin")
+        self.setGeometry(0,0,100,100)
+        self.window = parent
+        #
+        self.vbox = QVBoxLayout()
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # 
+        self.vbox.setContentsMargins(2,2,2,2)
+        self.setLayout(self.vbox)
+        #
+        self.tab_w = QTabWidget()
+        self.tab_w.setContentsMargins(0,0,0,0)
+        self.tab_w.setMovable(False)
+        self.tab_w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # self.tab_w.setWidgetResizable(True)
+        self.vbox.addWidget(self.tab_w, stretch = 10)
+        ######
+        ### panel tab
+        p_widget = QWidget()
+        self.tab_w.insertTab(0, p_widget, "Panel")
+        p_box = QVBoxLayout()
+        p_box.setContentsMargins(0,0,0,0)
+        p_widget.setLayout(p_box)
+        #
+        pform = QFormLayout()
+        p_box.addLayout(pform)
+        #
+        self._background = QLineEdit()
+        self._background.setText(BACKGROUND)
+        self._background.setToolTip("In the form: #rrggbb\nThe text colour has to be also setted.")
+        pform.addRow("Background colour ", self._background)
+        #
+        self._textcolor = QLineEdit()
+        self._textcolor.setText(TEXTCOLOR)
+        self._textcolor.setToolTip("In the form: #rrggbb\nThe background colour has to be also setted.")
+        pform.addRow("Text colour ", self._textcolor)
+        #
+        self._font_family = QLineEdit()
+        self._font_family.setText(FONTFAMILY)
+        self._font_family.setToolTip("Font family name, e.g. Serif or Sans\nLeave empty for the default font")
+        pform.addRow("Font family ", self._font_family)
+        #
+        self._margins = QSpinBox()
+        self._margins.setMaximum(1000)
+        self._margins.setValue(MARGINS)
+        pform.addRow("Page margins ", self._margins)
+        #
+        self._page_zoom = QSpinBox()
+        self._page_zoom.setMaximum(100)
+        self._page_zoom.setValue(PAGEZOOM)
+        pform.addRow("Page zoom ", self._page_zoom)
+        #####
+        ##### buttons
+        box_btn = QHBoxLayout()
+        self.vbox.addLayout(box_btn)
+        ok_btn = QPushButton(" OK ")
+        box_btn.addWidget(ok_btn)
+        ok_btn.clicked.connect(self.on_ok)
+        #
+        close_btn = QPushButton("Close")
+        box_btn.addWidget(close_btn)
+        close_btn.clicked.connect(self.close)
+        #
+        self.exec()
+    
+    def on_ok(self):
+        global BACKGROUND
+        global TEXTCOLOR
+        global FONTFAMILY
+        global MARGINS
+        global PAGEZOOM
+        global _settings_conf
+        try:
+            BACKGROUND = self._background.text()
+            _settings_conf["background"] = BACKGROUND
+            TEXTCOLOR = self._textcolor.text()
+            _settings_conf["textcolor"] = TEXTCOLOR
+            FONTFAMILY = self._font_family.text()
+            _settings_conf["fontfamily"] = FONTFAMILY
+            MARGINS = self._margins.value()
+            _settings_conf["margins"] = MARGINS
+            _starting_zoom = PAGEZOOM
+            PAGEZOOM = self._page_zoom.value()
+            _settings_conf["pagezoom"] = PAGEZOOM
+            #
+            # write the configuration back
+            _ff = open(_config_file,"w")
+            json.dump(_settings_conf, _ff, indent = 4)
+            _ff.close()
+            # set the settings
+            if BACKGROUND and TEXTCOLOR:
+                self.window.text_edit.setStyleSheet("background-color: {}; color: {};".format(BACKGROUND,TEXTCOLOR))
+            if FONTFAMILY:
+                _font = self.window.text_edit.font()
+                _font.setFamily(FONTFAMILY)
+                self.window.text_edit.setFont(_font)
+            if MARGINS:
+                self.window.text_edit.document().setDocumentMargin(MARGINS)
+            if (PAGEZOOM-_starting_zoom) > 0:
+                for i in range((PAGEZOOM-_starting_zoom)):
+                    self.window.text_edit.zoomIn()
+            elif (PAGEZOOM-_starting_zoom) < 0:
+                for i in range(abs((PAGEZOOM-_starting_zoom))):
+                    self.window.text_edit.zoomOut()
+        except Exception as E:
+            MyDialog("Error", str(E), None)
+        #
+        self.close()
 
 # type - message - parent
 class MyDialog(QMessageBox):
