@@ -21,6 +21,6 @@ Features:
 - custom scripts on selected text: a sample script is shipped: searching for a meaning of a word with Wordnet; the command line wn and yad are required
 - bookmarks: one bookmark for each book: just select something and bookmark it; the bookmark can be changed (just repeat the action on another selection), and removed (do not select nothing).
 
-This program can be considered complete about its features.
+This program is features complete.
 
 ![My image](https://github.com/frank038/ebookreader/blob/main/screenshot01.jpg)
