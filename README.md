@@ -18,7 +18,7 @@ Features:
 - custom background colour, text colour, margins, initial zoom level (in the cfgCfg.py)
 - clickable ebook links (not external links)
 - the window size is stored
-- custom scripts on selected text: a sample script is shipped: search for a meaning of a word with Wordnet; the command line wn and yad are required
+- custom scripts on selected text: a sample script is shipped: searching for a meaning of a word with Wordnet; the command line wn and yad are required
 - bookmarks: one bookmark for each book: just select something and bookmark it; the bookmark can be changed (just repeat the action on another selection), and removed (do not select nothing).
 
 This program can be considered complete about its features.
