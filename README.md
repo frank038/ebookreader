@@ -13,6 +13,7 @@ Features:
 - navigation by mouse
 - navigation by buttons
 - zoom
+- stylesheets
 - printing (of the current chapter)
 - basic epub info (just put the mouse pointer over the info button)
 - custom background colour, text colour, margins, initial zoom level (in the cfgCfg.py)
