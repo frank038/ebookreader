@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.2
+# V. 0.2.1
 
 import sys, os, json
 from subprocess import Popen
@@ -9,6 +9,8 @@ from PyQt6.QtGui import (QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QIma
 from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint,QRect)
 import zipfile
 from html.parser import HTMLParser, unescape
+import urllib.parse as _parse
+from urllib.parse import unquote, urlparse
 from PyQt6 import QtPrintSupport
 from cfgCfg import *
 
@@ -577,7 +579,8 @@ class dictMainWindow(QMainWindow):
     def load_image_full_path(self):
         _zip_files = self.input_zip.filelist
         for el in _list_images:
-            img_name = os.path.basename(el)
+            # img_name = os.path.basename(el)
+            img_name = unquote(_parse.urlparse(os.path.basename(el)).path)
             _l = len(img_name)
             for ell in _zip_files:
                 if ell.filename[-_l:] == img_name:
@@ -588,6 +591,7 @@ class dictMainWindow(QMainWindow):
     def replace_text_images(self, _text):
         for _img in _list_images:
             _img_name = os.path.basename(_img)
+            # _img_name = unquote(_parse.urlparse(os.path.basename(_img)).path)
             if _img_name in _text:
                 _image = _img_name
                 _pos = _text.find(_image)
@@ -608,7 +612,8 @@ class dictMainWindow(QMainWindow):
                         break
                 #
                 for ell in self.list_image_full_path:
-                    if os.path.basename(ell) == _img_name:
+                    # if os.path.basename(ell) == _img_name:
+                    if os.path.basename(ell) == unquote(_parse.urlparse(os.path.basename(_img_name)).path):
                         if _text[_pos_start-1] == "=":
                             new_text = _text.replace(_text[_pos_start:_pos_end+1],'"'+ell+'"')
                             return new_text
@@ -782,7 +787,7 @@ class confWin(QDialog):
         ######
         ### panel tab
         p_widget = QWidget()
-        self.tab_w.insertTab(0, p_widget, "Panel")
+        self.tab_w.insertTab(0, p_widget, "Settings")
         p_box = QVBoxLayout()
         p_box.setContentsMargins(0,0,0,0)
         p_widget.setLayout(p_box)
