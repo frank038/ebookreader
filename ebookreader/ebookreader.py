@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.2.2
+# V. 0.2.3
 
 import sys, os, json
 from subprocess import Popen
@@ -23,7 +23,7 @@ os.chdir(curr_dir)
 WINW = 1400
 WINH = 950
 
-_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2, "text-alignment": 0}
+_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2, "use-css": 1, "text-alignment": 0}
 _config_file = os.path.join(curr_dir,"config.json")
 _settings_conf = None
 if not os.path.exists(_config_file):
@@ -48,6 +48,7 @@ FONTFAMILY = _settings_conf["fontfamily"]
 MARGINS = _settings_conf["margins"]
 PAGEZOOM = _settings_conf["pagezoom"]
 TEXTALIGNMENT = _settings_conf["text-alignment"]
+USE_STYLESHEET = _settings_conf["use-css"]
 
 try:
     with open("epubreadersize.cfg", "r") as ifile:
@@ -394,7 +395,10 @@ class dictMainWindow(QMainWindow):
                 for ell in el:
                     if ell[0] == "href":
                         if ell[1] not in self._css:
-                            self._css.append(ell[1])
+                            _css = ell[1]
+                            if _css[0:2] == "./":
+                                _css = _css[2:]
+                            self._css.append(_css)
                         break
         #
         parser.close()
@@ -555,12 +559,26 @@ class dictMainWindow(QMainWindow):
             if _ret != None:
                 _tmp = _ret
             # replace the css path with its full path
+            _css_full_path = None
             if USE_STYLESHEET:
                 _ret = self.replace_text_css(_tmp)
                 if _ret != None:
-                    _tmp = _ret
+                    _tmp = _ret[0]
+                    _css = _ret[1]
+                    if _css:
+                        _zip_files = self.input_zip.filelist
+                        for el in _zip_files:
+                            _l = len(_css)
+                            if el.filename[-_l:] == _css:
+                                _css_full_path = el
+                                break
+                            
             #
             self.text_edit.setHtml(_tmp)
+            #
+            if _css_full_path:
+                _css_text = self.input_zip.read(_css_full_path.filename).decode()
+                self.text_edit.document().setDefaultStyleSheet(_css_text)
             self.text_edit.verticalScrollBar().setSliderPosition(0)
             if TEXTALIGNMENT == 1:
                 if _n == 0:
@@ -595,7 +613,6 @@ class dictMainWindow(QMainWindow):
     def replace_text_images(self, _text):
         for _img in _list_images:
             _img_name = os.path.basename(_img)
-            # _img_name = unquote(_parse.urlparse(os.path.basename(_img)).path)
             if _img_name in _text:
                 _image = _img_name
                 _pos = _text.find(_image)
@@ -627,9 +644,11 @@ class dictMainWindow(QMainWindow):
     
     # replace the original css path with its full path
     def replace_text_css(self, _text):
+        page_css = None
         new_text = _text
         if self._css:
             for _css in self._css:
+                page_css = _css
                 _css_name = os.path.basename(_css)
                 if _css_name in _text:
                     _pos = _text.find(_css_name)
@@ -654,7 +673,8 @@ class dictMainWindow(QMainWindow):
                             if os.path.basename(_css) == os.path.basename(el):
                                 new_text = new_text.replace(_text[_pos_start:_pos_end+1],'"'+el+'"')
                                 break
-            return new_text
+                    break
+            return [new_text, page_css]
         return None
     
     # load and display the page
@@ -824,6 +844,11 @@ class confWin(QDialog):
         self._page_zoom.setValue(PAGEZOOM)
         pform.addRow("Page zoom ", self._page_zoom)
         #
+        self._stylesheet = QComboBox()
+        self._stylesheet.addItems(["No", "Yes"])
+        self._stylesheet.setCurrentIndex(USE_STYLESHEET)
+        pform.addRow("Use the book stylesheets ", self._stylesheet)
+        #
         self._page_alignment = QComboBox()
         self._page_alignment.addItems(["Default", "Justify"])
         self._page_alignment.setCurrentIndex(TEXTALIGNMENT)
@@ -849,6 +874,7 @@ class confWin(QDialog):
         global MARGINS
         global PAGEZOOM
         global TEXTALIGNMENT
+        global USE_STYLESHEET
         global _settings_conf
         try:
             BACKGROUND = self._background.text()
@@ -862,6 +888,8 @@ class confWin(QDialog):
             _starting_zoom = PAGEZOOM
             PAGEZOOM = self._page_zoom.value()
             _settings_conf["pagezoom"] = PAGEZOOM
+            USE_STYLESHEET = self._stylesheet.currentIndex()
+            _settings_conf["use-css"] = USE_STYLESHEET
             TEXTALIGNMENT = self._page_alignment.currentIndex()
             _settings_conf["text-alignment"] = TEXTALIGNMENT
             #

@@ -4,5 +4,6 @@
     "fontfamily": "",
     "margins": 40,
     "pagezoom": 2,
-    "text-alignment": 1
+    "use-css": 1,
+    "text-alignment": 0
 }
