@@ -3,5 +3,6 @@
     "textcolor": "",
     "fontfamily": "",
     "margins": 40,
-    "pagezoom": 2
+    "pagezoom": 2,
+    "text-alignment": 1
 }

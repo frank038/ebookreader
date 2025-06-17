@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.2.1
+# V. 0.2.2
 
 import sys, os, json
 from subprocess import Popen
@@ -23,7 +23,7 @@ os.chdir(curr_dir)
 WINW = 1400
 WINH = 950
 
-_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2}
+_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2, "text-alignment": 0}
 _config_file = os.path.join(curr_dir,"config.json")
 _settings_conf = None
 if not os.path.exists(_config_file):
@@ -47,6 +47,7 @@ TEXTCOLOR = _settings_conf["textcolor"]
 FONTFAMILY = _settings_conf["fontfamily"]
 MARGINS = _settings_conf["margins"]
 PAGEZOOM = _settings_conf["pagezoom"]
+TEXTALIGNMENT = _settings_conf["text-alignment"]
 
 try:
     with open("epubreadersize.cfg", "r") as ifile:
@@ -170,6 +171,8 @@ def _parse_epub_data(_file):
                 for elll in ell:
                     if elll[0] == 'href':
                         _p_name = elll[1]
+                        if _p_name[0:2] == "./":
+                            _p_name = _p_name[2:]
                         _list_pages.append(_p_name)
     #
     parser.close()
@@ -539,7 +542,7 @@ class dictMainWindow(QMainWindow):
             _page = None
             try:
                 _page = self.input_zip.read(_page_name).decode()
-            except:
+            except Exception as E:
                 for el in self.input_zip.filelist:
                     _llll = len(_page_name)
                     if el.filename[-_llll:] == _page_name:
@@ -559,10 +562,11 @@ class dictMainWindow(QMainWindow):
             #
             self.text_edit.setHtml(_tmp)
             self.text_edit.verticalScrollBar().setSliderPosition(0)
-            if _n == 0:
-                self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignCenter))
-            else:
-                self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignJustify))
+            if TEXTALIGNMENT == 1:
+                if _n == 0:
+                    self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignCenter))
+                else:
+                    self.text_edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignJustify))
             # set the placeholder
             if self.isStarted == False:
                 if self.placeholder_position != ():
@@ -819,6 +823,11 @@ class confWin(QDialog):
         self._page_zoom.setMaximum(100)
         self._page_zoom.setValue(PAGEZOOM)
         pform.addRow("Page zoom ", self._page_zoom)
+        #
+        self._page_alignment = QComboBox()
+        self._page_alignment.addItems(["Default", "Justify"])
+        self._page_alignment.setCurrentIndex(TEXTALIGNMENT)
+        pform.addRow("Text alignment ", self._page_alignment)
         #####
         ##### buttons
         box_btn = QHBoxLayout()
@@ -839,6 +848,7 @@ class confWin(QDialog):
         global FONTFAMILY
         global MARGINS
         global PAGEZOOM
+        global TEXTALIGNMENT
         global _settings_conf
         try:
             BACKGROUND = self._background.text()
@@ -852,6 +862,8 @@ class confWin(QDialog):
             _starting_zoom = PAGEZOOM
             PAGEZOOM = self._page_zoom.value()
             _settings_conf["pagezoom"] = PAGEZOOM
+            TEXTALIGNMENT = self._page_alignment.currentIndex()
+            _settings_conf["text-alignment"] = TEXTALIGNMENT
             #
             # write the configuration back
             _ff = open(_config_file,"w")
