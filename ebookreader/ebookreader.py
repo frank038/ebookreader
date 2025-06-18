@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-# V. 0.2.3
+# V. 0.2.4
 
 import sys, os, json
 from subprocess import Popen
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QSpinBox,QFormLayout,QTabWidget,QDialog,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
 from PyQt6.QtGui import (QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction)
-from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint,QRect)
+from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint,QRect,QVariant)
 import zipfile
 from html.parser import HTMLParser, unescape
 import urllib.parse as _parse
@@ -23,7 +23,7 @@ os.chdir(curr_dir)
 WINW = 1400
 WINH = 950
 
-_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2, "use-css": 1, "text-alignment": 0}
+_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2, "use-css": 1, "use-font": 0, "text-alignment": 0}
 _config_file = os.path.join(curr_dir,"config.json")
 _settings_conf = None
 if not os.path.exists(_config_file):
@@ -49,6 +49,10 @@ MARGINS = _settings_conf["margins"]
 PAGEZOOM = _settings_conf["pagezoom"]
 TEXTALIGNMENT = _settings_conf["text-alignment"]
 USE_STYLESHEET = _settings_conf["use-css"]
+USE_EMBEDDED_FONT = _settings_conf["use-font"]
+
+if USE_STYLESHEET == 2:
+    USE_EMBEDDED_FONT = 0
 
 try:
     with open("epubreadersize.cfg", "r") as ifile:
@@ -309,16 +313,21 @@ class dictMainWindow(QMainWindow):
         self.input_zip = None
         if len(sys.argv) > 1:
             self._ffile = os.path.realpath(sys.argv[1])
-        if self._ffile and os.path.exists(self._ffile) and os.access(self._ffile, os.R_OK):
+        if self._ffile and os.path.isfile(self._ffile) and os.path.exists(self._ffile) and os.access(self._ffile, os.R_OK):
             # load the epub into memory
             self.load_zip(self._ffile)
             #
             self.list_image_full_path = []
             #
+            self.list_fonts = []
+            #
             if self._opf_file:
                 _parse_epub_data(self._opf_file)
-                if USE_STYLESHEET:
+                if USE_STYLESHEET == 1:
                     self._parse_epub_css(self._opf_file)
+                elif USE_STYLESHEET == 2:
+                    self.custom_css = ""
+                    self.parse_custom_css()
                 #
                 self.load_image_full_path()
                 #
@@ -385,10 +394,10 @@ class dictMainWindow(QMainWindow):
                     return i
         else:
             return None
-            
+    
     def _parse_epub_css(self, _file):
-        parser = MyHTMLParser()
-        parser.feed(_file)
+        # parser = MyHTMLParser()
+        # parser.feed(_file)
         #
         for el in manifest_list:
             if ('media-type', 'text/css') in el:
@@ -400,8 +409,29 @@ class dictMainWindow(QMainWindow):
                                 _css = _css[2:]
                             self._css.append(_css)
                         break
+            # fonts
+            if USE_EMBEDDED_FONT:
+                for ell in el:
+                    if ell[0] == "href":
+                        if "fonts/" in ell[1]:
+                            self.list_fonts.append(ell[1])
         #
-        parser.close()
+        # parser.close()
+    
+    def parse_custom_css(self):
+        custom_css_file = os.path.join(curr_dir,"custom_css","custom_style.css")
+        if os.path.exists(custom_css_file) and os.access(custom_css_file, os.R_OK):
+            with open(custom_css_file, "r") as _f:
+                self.custom_css = _f.read()
+        #
+        # _fonts = os.listdir(os.path.join(curr_dir,"custom_css","fonts"))
+        # try:
+            # for el in _fonts:
+                # _font = os.path.join(os.path.join(curr_dir,"custom_css","fonts"),el)
+                # # self.text_edit.document().addResource(QTextDocument.ResourceType.UserResource, QUrl(_font), QVariant(_font))
+                # self.text_edit.document().addResource(QTextDocument.ResourceType.UnknownResource, QUrl(_font), QVariant(_font))
+        # except Exception as E:
+            # MyDialog("Error", str(E), self)
     
     def wheelEvent(self, event):
         # to top
@@ -560,7 +590,7 @@ class dictMainWindow(QMainWindow):
                 _tmp = _ret
             # replace the css path with its full path
             _css_full_path = None
-            if USE_STYLESHEET:
+            if USE_STYLESHEET == 1:
                 _ret = self.replace_text_css(_tmp)
                 if _ret != None:
                     _tmp = _ret[0]
@@ -576,9 +606,12 @@ class dictMainWindow(QMainWindow):
             #
             self.text_edit.setHtml(_tmp)
             #
-            if _css_full_path:
+            if USE_STYLESHEET == 1 and _css_full_path != None:
                 _css_text = self.input_zip.read(_css_full_path.filename).decode()
                 self.text_edit.document().setDefaultStyleSheet(_css_text)
+            elif USE_STYLESHEET == 2:
+                self.text_edit.document().setDefaultStyleSheet(self.custom_css)
+            #
             self.text_edit.verticalScrollBar().setSliderPosition(0)
             if TEXTALIGNMENT == 1:
                 if _n == 0:
@@ -679,6 +712,7 @@ class dictMainWindow(QMainWindow):
     
     # load and display the page
     def _load_data(self):
+        # images
         try:
             for _img_name in self.list_image_full_path:
                 _img = self.input_zip.read(_img_name)
@@ -691,29 +725,38 @@ class dictMainWindow(QMainWindow):
         except Exception as E:
             MyDialog("Error", str(E), self)
         #
-        # css
-        if USE_STYLESHEET:
+        # fonts
+        if USE_EMBEDDED_FONT:
             try:
-                if self._css:
-                    for _css in self._css:
-                        _css_css = None
-                        _ll = len(_css)
-                        for el in self.input_zip.filelist:
-                            if el.filename[-_ll:] == _css:
-                                _css_css = el.filename
-                                file_css = self.input_zip.read(_css_css).decode()
-                                break
-                        #
-                        if _css_css:
-                            _l = len(_css_css)
-                            _zip_files = self.input_zip.filelist
-                            for ell in _zip_files:
-                                if ell.filename[-_l:] == _css_css:
-                                    self._css_css.append(ell.filename)
-                                    self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(ell.filename), ell.filename)
-                                    break
+                for el in self.list_fonts:
+                    # self.text_edit.document().addResource(QTextDocument.ResourceType.UserResource, QUrl(el), QVariant(el))
+                    self.text_edit.document().addResource(QTextDocument.ResourceType.UnknownResource, QUrl(el), QVariant(el))
             except Exception as E:
                 MyDialog("Error", str(E), self)
+        #### useless
+        # # css
+        # if USE_STYLESHEET:
+            # try:
+                # if self._css:
+                    # for _css in self._css:
+                        # _css_css = None
+                        # _ll = len(_css)
+                        # for el in self.input_zip.filelist:
+                            # if el.filename[-_ll:] == _css:
+                                # _css_css = el.filename
+                                # file_css = self.input_zip.read(_css_css).decode()
+                                # break
+                        # #
+                        # if _css_css:
+                            # _l = len(_css_css)
+                            # _zip_files = self.input_zip.filelist
+                            # for ell in _zip_files:
+                                # if ell.filename[-_l:] == _css_css:
+                                    # self._css_css.append(ell.filename)
+                                    # self.text_edit.document().addResource(QTextDocument.ResourceType.StyleSheetResource, QUrl(ell.filename), QVariant(ell.filename))
+                                    # break
+            # except Exception as E:
+                # MyDialog("Error", str(E), self)
         
     # load the epub in memory
     def load_zip(self, _epub):
@@ -845,9 +888,14 @@ class confWin(QDialog):
         pform.addRow("Page zoom ", self._page_zoom)
         #
         self._stylesheet = QComboBox()
-        self._stylesheet.addItems(["No", "Yes"])
+        self._stylesheet.addItems(["No", "Yes", "Custom"])
         self._stylesheet.setCurrentIndex(USE_STYLESHEET)
         pform.addRow("Use the book stylesheets ", self._stylesheet)
+        #
+        self._fonts = QComboBox()
+        self._fonts.addItems(["No", "Yes"])
+        self._fonts.setCurrentIndex(USE_EMBEDDED_FONT)
+        pform.addRow("Use the book fonts ", self._fonts)
         #
         self._page_alignment = QComboBox()
         self._page_alignment.addItems(["Default", "Justify"])
@@ -875,6 +923,7 @@ class confWin(QDialog):
         global PAGEZOOM
         global TEXTALIGNMENT
         global USE_STYLESHEET
+        global USE_EMBEDDED_FONT
         global _settings_conf
         try:
             BACKGROUND = self._background.text()
@@ -890,6 +939,8 @@ class confWin(QDialog):
             _settings_conf["pagezoom"] = PAGEZOOM
             USE_STYLESHEET = self._stylesheet.currentIndex()
             _settings_conf["use-css"] = USE_STYLESHEET
+            USE_EMBEDDED_FONT = self._fonts.currentIndex()
+            _settings_conf["use-font"] = USE_EMBEDDED_FONT
             TEXTALIGNMENT = self._page_alignment.currentIndex()
             _settings_conf["text-alignment"] = TEXTALIGNMENT
             #

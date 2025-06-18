@@ -5,5 +5,6 @@
     "margins": 40,
     "pagezoom": 2,
     "use-css": 1,
+    "use-font": 1,
     "text-alignment": 0
 }
