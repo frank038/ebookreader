@@ -14,6 +14,7 @@ Features:
 - navigation by buttons
 - zoom
 - stylesheets
+- custom stylesheet (overrides the epub stylesheets)
 - printing (of the current chapter)
 - basic epub info (just put the mouse pointer over the info button)
 - custom background colour, text colour, margins, initial zoom level (in the cfgCfg.py)
