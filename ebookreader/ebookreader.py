@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.2.4
+# V. 0.2.5
 
 import sys, os, json
 from subprocess import Popen
@@ -602,7 +602,6 @@ class dictMainWindow(QMainWindow):
                             if el.filename[-_l:] == _css:
                                 _css_full_path = el
                                 break
-                            
             #
             self.text_edit.setHtml(_tmp)
             #
@@ -644,6 +643,40 @@ class dictMainWindow(QMainWindow):
     
     # replace the original image paths with their full path 
     def replace_text_images(self, _text):
+        new_text = _text
+        for ell in self.list_image_full_path:
+            _img_name = os.path.basename(ell)
+            if _img_name in new_text:
+                _pos = new_text.find(_img_name)
+                _pos_end = new_text.find('"', _pos)
+                _pos_start = None
+                i = 1
+                while 1:
+                    ret = new_text.find('"', _pos-i)
+                    if _pos-i == 0:
+                        break
+                    elif ret == -1:
+                        i+=1
+                    elif ret > _pos:
+                        i+=1
+                        continue
+                    else:
+                        _pos_start = _pos-i
+                        break
+                #
+                if os.path.basename(ell) == unquote(_parse.urlparse(os.path.basename(_img_name)).path):
+                    if new_text[_pos_start-1] == "=":
+                        new_text = new_text.replace(new_text[_pos_start:_pos_end+1],'"'+ell+'"')
+        #
+        new_text = new_text.replace("<image", "<img")
+        new_text = new_text.replace("xlink:href=", "src=")
+        new_text = new_text.replace("href=", "src=")
+        #
+        return new_text
+    
+    # old
+    # replace the original image paths with their full path 
+    def replace_text_images2(self, _text):
         for _img in _list_images:
             _img_name = os.path.basename(_img)
             if _img_name in _text:
