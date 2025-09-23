@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-# V. 0.2.5
+# V. 0.2.6
 
 import sys, os, json
 from subprocess import Popen
-from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QSpinBox,QFormLayout,QTabWidget,QDialog,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu)
-from PyQt6.QtGui import (QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction)
+from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QSpinBox,QFormLayout,QTabWidget,QDialog,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu,QAbstractScrollArea)
+from PyQt6.QtGui import (QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction,QKeyEvent)
 from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint,QRect,QVariant)
 import zipfile
 from html.parser import HTMLParser, unescape
@@ -208,32 +208,38 @@ class dictMainWindow(QMainWindow):
         self.chap_btn = QComboBox()
         self.button_box.addWidget(self.chap_btn)
         self.chap_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.chap_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         #
         self.prev_btn = QPushButton()
         self.prev_btn.setIcon(QIcon().fromTheme("previous", QIcon(os.path.join(curr_dir, "icons", "previous.png"))))
         self.prev_btn.setToolTip("Previous page")
         self.button_box.addWidget(self.prev_btn)
         self.prev_btn.clicked.connect(lambda:self.on_change_page(-1))
+        self.prev_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         #
         self.next_btn = QPushButton()
         self.next_btn.setIcon(QIcon().fromTheme("next", QIcon(os.path.join(curr_dir, "icons", "next.png"))))
         self.next_btn.setToolTip("Next page")
         self.button_box.addWidget(self.next_btn)
         self.next_btn.clicked.connect(lambda:self.on_change_page(1))
+        self.next_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         #
         self.zoom_in_btn = QPushButton()
         self.zoom_in_btn.setIcon(QIcon().fromTheme("zoom-in", QIcon(os.path.join(curr_dir, "icons", "zoom-in.png"))))
         self.zoom_in_btn.setToolTip("Increase the text size")
         self.button_box.addWidget(self.zoom_in_btn)
         self.zoom_in_btn.clicked.connect(lambda:self.on_zoom_action(1))
+        self.zoom_in_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         #
         self.zoom_out_btn = QPushButton()
         self.zoom_out_btn.setIcon(QIcon().fromTheme("zoom-out", QIcon(os.path.join(curr_dir, "icons", "zoom-out.png"))))
         self.zoom_out_btn.setToolTip("Decrease the text size")
         self.button_box.addWidget(self.zoom_out_btn)
         self.zoom_out_btn.clicked.connect(lambda:self.on_zoom_action(-1))
+        self.zoom_out_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         #
         self.menu_btn = QPushButton()
+        self.menu_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.menu_btn.setIcon(QIcon(os.path.join(curr_dir,"icons/gear.png")))
         self.menu_in_btn = QMenu()
         self.menu_btn.setMenu(self.menu_in_btn)
@@ -280,6 +286,10 @@ class dictMainWindow(QMainWindow):
         self.text_edit.document().setDocumentMargin(MARGINS)
         # self.text_edit.document().setIndentWidth(24)
         self.text_edit.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse|Qt.TextInteractionFlag.LinksAccessibleByMouse)
+        self.text_edit.setFocus()
+        self.text_edit.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        #
+        self.change_page = 0
         #
         if PAGEZOOM > 0:
             for i in range(PAGEZOOM):
@@ -290,6 +300,10 @@ class dictMainWindow(QMainWindow):
         #
         if BACKGROUND and TEXTCOLOR:
             self.text_edit.setStyleSheet("background-color: {}; color: {};".format(BACKGROUND,TEXTCOLOR))
+        elif BACKGROUND:
+            self.text_edit.setStyleSheet("background-color: {};".format(BACKGROUND))
+        elif TEXTCOLOR:
+            self.text_edit.setStyleSheet("color: {};".format(TEXTCOLOR))
         #
         if FONTFAMILY:
             _font = self.text_edit.font()
@@ -361,6 +375,7 @@ class dictMainWindow(QMainWindow):
                     self.isStarted = True
                 #
                 self.text_edit.mouseReleaseEvent = self.on_mouseReleaseEvent
+                self.text_edit.keyReleaseEvent = self.on_keyReleaseEvent
                 #
                 self.chap_btn.currentIndexChanged.connect(self.on_chap_changed)
             else:
@@ -475,6 +490,35 @@ class dictMainWindow(QMainWindow):
                                         return
         return super().mousePressEvent(event)
     
+    def on_keyReleaseEvent(self, event):
+        if type(event) == QKeyEvent and event.key() == Qt.Key.Key_PageUp:
+            pos_u = self.text_edit.verticalScrollBar().sliderPosition()
+            pos_minimum = self.text_edit.verticalScrollBar().minimum()
+            if self.change_page == pos_minimum:
+                self.on_change_page(-1)
+                self.page_change = 0
+            else:
+                self.change_page = pos_u
+        elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_PageDown:
+            pos_d = self.text_edit.verticalScrollBar().sliderPosition()
+            pos_maximum = self.text_edit.verticalScrollBar().maximum()
+            if self.change_page == pos_maximum:
+                self.on_change_page(1)
+                self.page_change = 0
+            else:
+                self.change_page = pos_d
+        elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_Up:
+            self.change_page = self.text_edit.verticalScrollBar().sliderPosition()
+        elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_Down:
+            self.change_page = self.text_edit.verticalScrollBar().sliderPosition()
+        elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_Left:
+            self.on_change_page(-1)
+            self.page_change = 0
+        elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_Right:
+            self.on_change_page(1)
+            self.page_change = 0
+        return super().keyReleaseEvent(event)
+    
     # set the page from link
     def on_link_pressed(self, _i):
         self.chap_btn.setCurrentIndex(_i)
@@ -582,6 +626,7 @@ class dictMainWindow(QMainWindow):
                     if el.filename[-_llll:] == _page_name:
                         _page = self.input_zip.read(el.filename).decode()
                         break
+            #
             # remove the entity block
             _tmp = self.replace_text(_page)
             # replace the image link with their full path
@@ -897,12 +942,14 @@ class confWin(QDialog):
         #
         self._background = QLineEdit()
         self._background.setText(BACKGROUND)
-        self._background.setToolTip("In the form: #rrggbb\nThe text colour has to be also setted.")
+        # self._background.setToolTip("In the form: #rrggbb\nThe text colour has to be also setted.")
+        self._background.setToolTip("In the form: #rrggbb")
         pform.addRow("Background colour ", self._background)
         #
         self._textcolor = QLineEdit()
         self._textcolor.setText(TEXTCOLOR)
-        self._textcolor.setToolTip("In the form: #rrggbb\nThe background colour has to be also setted.")
+        # self._textcolor.setToolTip("In the form: #rrggbb\nThe background colour has to be also setted.")
+        self._textcolor.setToolTip("In the form: #rrggbb")
         pform.addRow("Text colour ", self._textcolor)
         #
         self._font_family = QLineEdit()
