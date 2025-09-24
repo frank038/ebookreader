@@ -12,7 +12,7 @@ Features:
 - navigation by chapters
 - navigation by mouse
 - navigation by buttons
-- navigation by keyboard: page up and down for page scrolling; up and down for line scrolling; left and right for page change;
+- navigation by keyboard: page up and down for page scrolling; up and down for line scrolling; left and right for page/chapter change;
 - zoom
 - stylesheets
 - custom stylesheet (overrides the epub stylesheets)
