@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.2.6
+# V. 0.2.7
 
 import sys, os, json
 from subprocess import Popen
@@ -496,7 +496,6 @@ class dictMainWindow(QMainWindow):
             pos_minimum = self.text_edit.verticalScrollBar().minimum()
             if self.change_page == pos_minimum:
                 self.on_change_page(-1)
-                self.page_change = 0
             else:
                 self.change_page = pos_u
         elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_PageDown:
@@ -504,7 +503,6 @@ class dictMainWindow(QMainWindow):
             pos_maximum = self.text_edit.verticalScrollBar().maximum()
             if self.change_page == pos_maximum:
                 self.on_change_page(1)
-                self.page_change = 0
             else:
                 self.change_page = pos_d
         elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_Up:
@@ -513,10 +511,8 @@ class dictMainWindow(QMainWindow):
             self.change_page = self.text_edit.verticalScrollBar().sliderPosition()
         elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_Left:
             self.on_change_page(-1)
-            self.page_change = 0
         elif type(event) == QKeyEvent and event.key() == Qt.Key.Key_Right:
             self.on_change_page(1)
-            self.page_change = 0
         return super().keyReleaseEvent(event)
     
     # set the page from link
@@ -609,6 +605,7 @@ class dictMainWindow(QMainWindow):
         if curr_idx + _n == -1 or curr_idx + _n == self.chap_btn.count():
             return
         self.chap_btn.setCurrentIndex(curr_idx+_n)
+        self.page_change = 0
         
     def on_chap_changed(self, _idx):
         self._load_page(_idx)
