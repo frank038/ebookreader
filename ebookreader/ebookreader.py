@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.2.7
+# V. 0.2.8
 
 import sys, os, json
 from subprocess import Popen
@@ -840,9 +840,18 @@ class dictMainWindow(QMainWindow):
         for el in zip_list:
             if el.is_dir():
                 continue
-            if el.filename.endswith(".opf"):
+            elif os.path.dirname(el.filename) != "":
+                continue
+            elif el.filename.endswith(".opf"):
                 self._opf_file = self.input_zip.read(el.filename).decode()
                 break
+        if self._opf_file == None:
+            for el in zip_list:
+                if el.is_dir():
+                    continue
+                elif el.filename.endswith(".opf"):
+                    self._opf_file = self.input_zip.read(el.filename).decode()
+                    break
         
     def replace_text(self, aaa):
         _start = aaa.find("<!DOCTYPE")
