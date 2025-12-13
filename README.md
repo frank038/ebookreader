@@ -13,12 +13,12 @@ Features:
 - navigation by mouse
 - navigation by buttons
 - navigation by keyboard: page up and down for page scrolling; up and down for line scrolling; left and right for page/chapter change;
-- navigation by TOC (from the program and from the ebook)
+- navigation by TOC (from the program and from the ebook, when possible)
 - zoom
 - stylesheets
 - custom stylesheet (overrides the epub stylesheets)
 - printing (of the current chapter)
-- basic epub info (just put the mouse pointer over the info button)
+- basic epub info
 - custom background colour, text colour, margins, initial zoom level (in the cfgCfg.py)
 - clickable ebook links (not external links)
 - the window size is stored
