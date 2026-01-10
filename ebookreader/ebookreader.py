@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 
-# V. 0.2.8
+# V. 0.3.1
 
 import sys, os, json
 from subprocess import Popen
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QSpinBox,QFormLayout,QTabWidget,QDialog,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu,QAbstractScrollArea)
-from PyQt6.QtGui import (QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction,QKeyEvent)
+from PyQt6.QtGui import (QFontMetrics,QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction,QKeyEvent)
 from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint,QRect,QVariant)
 import zipfile
 from html.parser import HTMLParser, unescape
 import urllib.parse as _parse
 from urllib.parse import unquote, urlparse
+# import re
+# # TAG_RE = re.compile(r'<[^>]+>')
+# TAG_RE = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 from PyQt6 import QtPrintSupport
 from cfgCfg import *
 
@@ -23,7 +26,7 @@ os.chdir(curr_dir)
 WINW = 1400
 WINH = 950
 
-_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2, "use-css": 1, "use-font": 0, "text-alignment": 0}
+_starting_config = {"background":"", "textcolor":"", "fontfamily":"", "margins":40, "pagezoom":2, "use-css": 1, "use-font": 0, "text-alignment": 0, "image-fit": 1, "build-index": 1, "elide-text": 0, "elide-gap": 60}
 _config_file = os.path.join(curr_dir,"config.json")
 _settings_conf = None
 if not os.path.exists(_config_file):
@@ -50,6 +53,12 @@ PAGEZOOM = _settings_conf["pagezoom"]
 TEXTALIGNMENT = _settings_conf["text-alignment"]
 USE_STYLESHEET = _settings_conf["use-css"]
 USE_EMBEDDED_FONT = _settings_conf["use-font"]
+REMOVE_W_H_TAGS = _settings_conf["image-fit"]
+# from page file name to page name
+BUILD_INDEX = _settings_conf["build-index"]
+ELIDE_TEXT = _settings_conf["elide-text"]
+# correct the elided text width to prevent the main window to enlarge
+_GAP = _settings_conf["elide-gap"]
 
 if USE_STYLESHEET == 2:
     USE_EMBEDDED_FONT = 0
@@ -146,14 +155,46 @@ class MyHTMLParser(HTMLParser):
         if _publisher == "dc:publisher":
             _publisher = data
 
+
+class CleanHTML(HTMLParser):
+    def reset(self) -> None:
+        self.extracted_data = ""
+        return super().reset()
+
+    def remove_tags(self, html_data: str) -> str:
+        """
+        Args:
+            html_data (str): HTML data which might contain tags.
+
+        Returns:
+            str: Data without any HTML tags. Forces feeding of any buffered data.
+        """
+        self.reset()
+        self.feed(html_data)
+        self.close()
+        return self.extracted_data
+
+    def handle_data(self, data: str) -> None:
+        """
+        Args:
+            data (str): Html data extracted from tags to be processed.
+        """
+        self.extracted_data += data
+
+
 _toc = None
 # the ebook images
 _list_images = []
 # the real pages to read - filename with path
 _list_pages = []
 
-
+# the cover
+_COV = None
+# the navigation page
+_NAV = None
 def _parse_epub_data(_file):
+    global _NAV
+    global _COV
     parser = MyHTMLParser()
     parser.feed(_file)
     # the ebook images
@@ -163,6 +204,30 @@ def _parse_epub_data(_file):
             if ell[0] == 'media-type':
                 if 'image/' in ell[1]:
                     _is_image = 1
+        if _NAV == None or not isinstance(_NAV,str):
+            for ell in el:
+                if ell[0] == 'properties':
+                    if ell[1] == 'nav':
+                        _NAV = 1
+        
+        if _NAV == 1:
+            for ell in el:
+                # if ell[0] == 'id':
+                    # _NAV = ell[1]
+                if ell[0] == 'href':
+                    _NAV = os.path.basename(ell[1])
+        
+        if _COV == None or not isinstance(_COV,str):
+            for ell in el:
+                if ell[0] == 'properties':
+                    if ell[1] == 'cover-image':
+                        _COV = 1
+        
+        if _COV == 1:
+            for ell in el:
+                if ell[0] == 'href':
+                    _COV = os.path.basename(ell[1])
+        
         if _is_image == 1:
             for ell in el:
                 if ell[0] == 'href':
@@ -178,7 +243,8 @@ def _parse_epub_data(_file):
                         _p_name = elll[1]
                         if _p_name[0:2] == "./":
                             _p_name = _p_name[2:]
-                        _list_pages.append(_p_name)
+                        # _list_pages.append(_p_name)
+                        _list_pages.append(unquote(_p_name))
     #
     parser.close()
 
@@ -343,6 +409,13 @@ class dictMainWindow(QMainWindow):
                     self.custom_css = ""
                     self.parse_custom_css()
                 #
+                global BUILD_INDEX
+                if _NAV == None:
+                    BUILD_INDEX = 0
+                if BUILD_INDEX == 1:
+                    self.toc_list = {}
+                    self.build_index()
+                #
                 self.load_image_full_path()
                 #
                 self._info_data = "Title: {}\nCreator: {}\nDate: {}\nLanguage: {}\nSubject: {}\nCoverage: {}\nRights: {}\nPublisher: {}".format(_title,_creator,_date,_language,_subject,_coverage,_rights,_publisher)
@@ -351,9 +424,9 @@ class dictMainWindow(QMainWindow):
                     self.setWindowTitle(_title)
                 else:
                     self.setWindowTitle(os.path.basename(self._ffile))
-                #
+                # preload some data e.g. images fonts
                 self._load_data()
-                #
+                # populate the toc combobox
                 self.pop_chap_btn()
                 #
                 self.isStarted = False
@@ -381,6 +454,40 @@ class dictMainWindow(QMainWindow):
             else:
                 MyDialog("Info", "Missed files in the epub.", self)
                 self.on_close()
+    
+    def build_index(self):
+        global _NAV
+        if isinstance(_NAV,str):
+            is_nav = 1
+            _page_name = _NAV
+            _page = None
+            try:
+                _page = self.input_zip.read(_page_name).decode()
+            except Exception as E:
+                for el in self.input_zip.filelist:
+                    _llll = len(_page_name)
+                    if el.filename[-_llll:] == _page_name:
+                        _page = self.input_zip.read(el.filename).decode()
+                        break
+            if _page == None:
+                global BUILD_INDEX
+                BUILD_INDEX = 0
+                _NAV = None
+                return
+            # 
+            start_pos = _page.find('<a href="')
+            i = 0
+            while start_pos != -1:
+                # set a limit to 2000 pages
+                if i == 2000:
+                    break
+                end_pos = _page.find('">', start_pos)
+                file_name = _page[start_pos+9:end_pos]
+                end_pos2 = _page.find('</a>', end_pos)
+                page_name = _page[end_pos+2:end_pos2]
+                self.toc_list[file_name] = page_name
+                start_pos = _page.find('<a href="', start_pos+9)
+                i += 1
     
     def on_load_placeholders(self):
         try:
@@ -483,11 +590,19 @@ class dictMainWindow(QMainWindow):
                             if os.path.basename(ell) == os.path.basename(el.filename):
                                 _link = ell
                                 _iii = self.chap_btn.count()
-                                for i in range(_iii):
-                                    item_text = self.chap_btn.itemText(i)
-                                    if os.path.basename(item_text) == os.path.basename(ell):
-                                        self.on_link_pressed(i)
-                                        return
+                                if BUILD_INDEX == 1:
+                                    for i in range(_iii):
+                                        item_text = self.chap_btn.itemText(i)
+                                        curr_data = self.chap_btn.itemData(i, Qt.ItemDataRole.UserRole)
+                                        if os.path.basename(curr_data) == os.path.basename(ell):
+                                            self.on_link_pressed(i)
+                                            return
+                                else:
+                                    for i in range(_iii):
+                                        item_text = self.chap_btn.itemText(i)
+                                        if os.path.basename(item_text) == os.path.basename(ell):
+                                            self.on_link_pressed(i)
+                                            return
         return super().mousePressEvent(event)
     
     def on_keyReleaseEvent(self, event):
@@ -552,7 +667,7 @@ class dictMainWindow(QMainWindow):
                             break
                 _sel = self.text_edit.textCursor().selection().toPlainText()
                 if _sel:
-                    # a previous placeholder has been found
+                    # whether a previous placeholder has been found
                     if _found:
                         ret = MyDialog("Question", "Do you want to remove the previous bookmark?", self)
                         if ret.result() == QMessageBox.StandardButton.Ok:
@@ -598,8 +713,49 @@ class dictMainWindow(QMainWindow):
         
     def pop_chap_btn(self):
         self.chap_btn.clear()
-        self.chap_btn.addItems(_list_pages)
+        combo_width = self.chap_btn.geometry().width()
+        if BUILD_INDEX == 1:
+            for _page in _list_pages:
+                _page_n = _page.split("/")[-1]
+                if _page_n in self.toc_list:
+                    page_name = self.toc_list[_page_n]
+                    if ELIDE_TEXT:
+                        e_text = self.elide_text(page_name, -1)
+                    else:
+                        e_text = self.elide_text(page_name, combo_width)
+                    self.chap_btn.addItem(e_text,_page)
+                elif _page in self.toc_list:
+                    page_name = self.toc_list[_page]
+                    if ELIDE_TEXT:
+                        e_text = self.elide_text(page_name, -1)
+                    else:
+                        e_text = self.elide_text(page_name, combo_width)
+                    self.chap_btn.addItem(e_text,_page)
+                elif _page_n == _NAV:
+                    self.chap_btn.addItem("Toc",_page)
+                else:
+                    self.chap_btn.addItem("Page",_page)
+        else:
+            self.chap_btn.addItems(_list_pages)
     
+    def elide_text(self, _text, _size):
+        try:
+            p = CleanHTML()
+            _text = p.remove_tags(_text)
+        except:
+            pass
+        # try:
+            # _text = TAG_RE.sub('', _text)
+        # except:
+            # pass
+        _font = self.chap_btn.font()
+        fm = QFontMetrics(_font)
+        if _size == -1:
+            elidedText = fm.elidedText(_text,Qt.TextElideMode.ElideRight, _font.pointSize()*ELIDE_TEXT)
+        else:
+            elidedText = fm.elidedText(_text,Qt.TextElideMode.ElideRight, _size-_GAP)
+        return elidedText
+        
     def on_change_page(self, _n):
         curr_idx = self.chap_btn.currentIndex()
         if curr_idx + _n == -1 or curr_idx + _n == self.chap_btn.count():
@@ -613,21 +769,32 @@ class dictMainWindow(QMainWindow):
     # load and display the page in the document
     def _load_page(self, _n):
         try:
-            _page_name = _list_pages[_n]
+            # _page_name = _list_pages[_n]
+            _page_name = unquote(_list_pages[_n])
+            is_nav = 0
+            if isinstance(_NAV,str) and _NAV in _page_name:
+                is_nav = 1
             _page = None
             try:
                 _page = self.input_zip.read(_page_name).decode()
             except Exception as E:
-                for el in self.input_zip.filelist:
-                    _llll = len(_page_name)
-                    if el.filename[-_llll:] == _page_name:
-                        _page = self.input_zip.read(el.filename).decode()
-                        break
+                try:
+                    for el in self.input_zip.filelist:
+                        _llll = len(_page_name)
+                        if el.filename[-_llll:] == _page_name:
+                            # _page = self.input_zip.read(el.filename).decode()
+                            _page = unquote(self.input_zip.read(el.filename).decode())
+                            break
+                except:
+                    _page = None
             #
+            if _page == None:
+                self._load_page(_n+1)
+                return
             # remove the entity block
             _tmp = self.replace_text(_page)
             # replace the image link with their full path
-            _ret = self.replace_text_images(_tmp)
+            _ret = self.replace_text_images(_tmp, is_nav)
             if _ret != None:
                 _tmp = _ret
             # replace the css path with its full path
@@ -645,13 +812,17 @@ class dictMainWindow(QMainWindow):
                                 _css_full_path = el
                                 break
             #
-            self.text_edit.setHtml(_tmp)
+            # unquote the href - links and/or others
+            _tmp = self.unquote_href(_tmp)
+            # self.text_edit.setHtml(_tmp)
             #
             if USE_STYLESHEET == 1 and _css_full_path != None:
                 _css_text = self.input_zip.read(_css_full_path.filename).decode()
                 self.text_edit.document().setDefaultStyleSheet(_css_text)
             elif USE_STYLESHEET == 2:
                 self.text_edit.document().setDefaultStyleSheet(self.custom_css)
+            #
+            self.text_edit.setHtml(_tmp)
             #
             self.text_edit.verticalScrollBar().setSliderPosition(0)
             if TEXTALIGNMENT == 1:
@@ -684,7 +855,7 @@ class dictMainWindow(QMainWindow):
                     break
     
     # replace the original image paths with their full path 
-    def replace_text_images(self, _text):
+    def replace_text_images(self, _text, is_nav):
         new_text = _text
         for ell in self.list_image_full_path:
             _img_name = os.path.basename(ell)
@@ -709,26 +880,41 @@ class dictMainWindow(QMainWindow):
                 if os.path.basename(ell) == unquote(_parse.urlparse(os.path.basename(_img_name)).path):
                     if new_text[_pos_start-1] == "=":
                         new_text = new_text.replace(new_text[_pos_start:_pos_end+1],'"'+ell+'"')
-        #
-        new_text = new_text.replace("<image", "<img")
-        new_text = new_text.replace("xlink:href=", "src=")
-        new_text = new_text.replace("href=", "src=")
-        #
-        return new_text
-    
-    # old
-    # replace the original image paths with their full path 
-    def replace_text_images2(self, _text):
-        for _img in _list_images:
-            _img_name = os.path.basename(_img)
-            if _img_name in _text:
-                _image = _img_name
-                _pos = _text.find(_image)
-                _pos_end = _text.find('"', _pos)
+                # remove width and height tags
+                if REMOVE_W_H_TAGS:
+                    _pos_start2 = -1
+                    while 1:
+                        ret = new_text.find('<', _pos-i)
+                        if _pos-i == 0:
+                            break
+                        elif ret == -1:
+                            i+=1
+                        elif ret > _pos:
+                            i+=1
+                            continue
+                        else:
+                            _pos_start2 = _pos-i
+                            break
+                    # the width tag
+                    _aa = new_text.find("width=", _pos_start2)
+                    _bb = new_text.find(" ", _aa)
+                    if _bb < _pos_end:
+                        _tt = new_text[_aa:_bb]
+                        new_text = new_text.replace(_tt,"")
+                    # the height tag
+                    _aa2 = new_text.find("height=", _pos_start2)
+                    _bb2 = new_text.find(" ", _aa2)
+                    if _bb2 < _pos_end:
+                        _tt2 = new_text[_aa2:_bb2]
+                        new_text = new_text.replace(_tt2,"")
+            elif _parse.quote(_img_name) in new_text:
+                _img_name = _parse.quote(_img_name)
+                _pos = new_text.find(_img_name)
+                _pos_end = new_text.find('"', _pos)
                 _pos_start = None
                 i = 1
                 while 1:
-                    ret = _text.find('"', _pos-i)
+                    ret = new_text.find('"', _pos-i)
                     if _pos-i == 0:
                         break
                     elif ret == -1:
@@ -740,15 +926,44 @@ class dictMainWindow(QMainWindow):
                         _pos_start = _pos-i
                         break
                 #
-                for ell in self.list_image_full_path:
-                    # if os.path.basename(ell) == _img_name:
-                    if os.path.basename(ell) == unquote(_parse.urlparse(os.path.basename(_img_name)).path):
-                        if _text[_pos_start-1] == "=":
-                            new_text = _text.replace(_text[_pos_start:_pos_end+1],'"'+ell+'"')
-                            return new_text
-                #
-                break
-        return None
+                if os.path.basename(ell) == unquote(_parse.urlparse(os.path.basename(_img_name)).path):
+                    if new_text[_pos_start-1] == "=":
+                        new_text = new_text.replace(new_text[_pos_start:_pos_end+1],'"'+ell+'"')
+                # remove width and height tags
+                if REMOVE_W_H_TAGS:
+                    _pos_start2 = -1
+                    while 1:
+                        ret = new_text.find('<', _pos-i)
+                        if _pos-i == 0:
+                            break
+                        elif ret == -1:
+                            i+=1
+                        elif ret > _pos:
+                            i+=1
+                            continue
+                        else:
+                            _pos_start2 = _pos-i
+                            break
+                    # the width tag
+                    _aa = new_text.find("width=", _pos_start2)
+                    _bb = new_text.find(" ", _aa)
+                    if _bb < _pos_end:
+                        _tt = new_text[_aa:_bb]
+                        new_text = new_text.replace(_tt,"")
+                    # the height tag
+                    _aa2 = new_text.find("height=", _pos_start2)
+                    _bb2 = new_text.find(" ", _aa2)
+                    if _bb2 < _pos_end:
+                        _tt2 = new_text[_aa2:_bb2]
+                        new_text = new_text.replace(_tt2,"")
+        #
+        new_text = new_text.replace("<image", "<img")
+        new_text = new_text.replace("xlink:href=", "src=")
+        # # find a better solution for the nav page to preserve the images
+        # if is_nav == 0:
+            # new_text = new_text.replace("href=", "src=")
+        #
+        return new_text
     
     # replace the original css path with its full path
     def replace_text_css(self, _text):
@@ -785,6 +1000,23 @@ class dictMainWindow(QMainWindow):
             return [new_text, page_css]
         return None
     
+    def unquote_href(self, _text):
+        new_text = _text
+        try:
+            _pos = _text.find('href="')
+            while _pos != -1:
+                _pos2 = _text.find('"',_pos)
+                _pos_end = _text.find('"', _pos2+1)
+                _tmp = _text[_pos:_pos_end]
+                new_text = new_text.replace(_tmp, unquote(_tmp))
+                _pos = _text.find('href="', _pos_end+1)
+        except Exception as E:
+            MyDialog("Error", str(E), self)
+            return _text
+        #
+        return new_text
+            
+    
     # load and display the page
     def _load_data(self):
         # images
@@ -794,6 +1026,13 @@ class dictMainWindow(QMainWindow):
                 qba = QByteArray(_img)
                 _img1 = QImage()
                 _img1.loadFromData(qba)
+                try:
+                    if os.path.basename(_img_name) == _COV:
+                        _pix = QPixmap.fromImage(_img1)
+                        _icon = QIcon(_pix)
+                        self.setWindowIcon(_icon)
+                except:
+                    pass
                 if _img1.width() > self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2:
                     _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
                 self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name), _img1)
@@ -987,6 +1226,29 @@ class confWin(QDialog):
         self._page_alignment.addItems(["Default", "Justify"])
         self._page_alignment.setCurrentIndex(TEXTALIGNMENT)
         pform.addRow("Text alignment ", self._page_alignment)
+        #
+        self._image_fit = QComboBox()
+        self._image_fit.addItems(["No", "Yes"])
+        self._image_fit.setCurrentIndex(REMOVE_W_H_TAGS)
+        pform.addRow("Fit large images ", self._image_fit)
+        #
+        self.index_build = QComboBox()
+        self.index_build.addItems(["No", "Yes"])
+        self.index_build.setCurrentIndex(BUILD_INDEX)
+        pform.addRow("Use page names in the toc ", self.index_build)
+        #
+        self.text_elide = QSpinBox()
+        self.text_elide.setMaximum(1000)
+        self.text_elide.setValue(ELIDE_TEXT)
+        pform.addRow("Elide the text in the toc (0 automatic)", self.text_elide)
+        self.text_elide.valueChanged.connect(self.on_text_elide)
+        #
+        self.gap_elide = QSpinBox()
+        self.gap_elide.setMaximum(1000)
+        self.gap_elide.setValue(_GAP)
+        pform.addRow("Shrink the names in the toc ", self.gap_elide)
+        if self.text_elide.value() == 0:
+            self.gap_elide.setEnabled(False)
         #####
         ##### buttons
         box_btn = QHBoxLayout()
@@ -1001,6 +1263,12 @@ class confWin(QDialog):
         #
         self.exec()
     
+    def on_text_elide(self):
+        if self.text_elide.value() == 0:
+            self.gap_elide.setEnabled(False)
+        else:
+            self.gap_elide.setEnabled(True)
+    
     def on_ok(self):
         global BACKGROUND
         global TEXTCOLOR
@@ -1010,6 +1278,10 @@ class confWin(QDialog):
         global TEXTALIGNMENT
         global USE_STYLESHEET
         global USE_EMBEDDED_FONT
+        global REMOVE_W_H_TAGS
+        global BUILD_INDEX
+        global ELIDE_TEXT
+        global _GAP
         global _settings_conf
         try:
             BACKGROUND = self._background.text()
@@ -1029,6 +1301,14 @@ class confWin(QDialog):
             _settings_conf["use-font"] = USE_EMBEDDED_FONT
             TEXTALIGNMENT = self._page_alignment.currentIndex()
             _settings_conf["text-alignment"] = TEXTALIGNMENT
+            REMOVE_W_H_TAGS = self._image_fit.currentIndex()
+            _settings_conf["image-fit"] = REMOVE_W_H_TAGS
+            BUILD_INDEX = self.index_build.currentIndex()
+            _settings_conf["build-index"] = BUILD_INDEX
+            ELIDE_TEXT = self.text_elide.value()
+            _settings_conf["elide-text"] = ELIDE_TEXT
+            _GAP = self.gap_elide.value()
+            _settings_conf["elide-gap"] = _GAP
             #
             # write the configuration back
             _ff = open(_config_file,"w")
