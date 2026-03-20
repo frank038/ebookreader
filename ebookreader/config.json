@@ -2,9 +2,14 @@
     "background": "",
     "textcolor": "",
     "fontfamily": "",
+    "line-spacing": 100,
     "margins": 40,
-    "pagezoom": 2,
+    "pagezoom": 4,
     "use-css": 1,
-    "use-font": 1,
-    "text-alignment": 0
+    "use-font": 0,
+    "text-alignment": 0,
+    "image-fit": 1,
+    "build-index": 0,
+    "elide-text": 0,
+    "elide-gap": 60
 }

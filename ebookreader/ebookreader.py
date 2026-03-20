@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-# V. 0.3.1
+# V. 0.3.3
 
 import sys, os, json
 from subprocess import Popen
 from PyQt6.QtWidgets import (QMainWindow,QApplication,QWidget,QSpinBox,QFormLayout,QTabWidget,QDialog,QMessageBox,QComboBox,QTextEdit,QVBoxLayout,QHBoxLayout,QSizePolicy,QPushButton,QLabel,QLineEdit,QMenu,QAbstractScrollArea)
-from PyQt6.QtGui import (QFontMetrics,QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction,QKeyEvent)
+from PyQt6.QtGui import (QGuiApplication,QTextBlockFormat,QFontMetrics,QTextCursor,QIcon,QColor,QTextOption,QTextDocument,QImage,QPixmap,QAction,QKeyEvent)
 from PyQt6.QtCore import (Qt,QUrl,QByteArray,QEvent,QPoint,QRect,QVariant)
 import zipfile
 from html.parser import HTMLParser, unescape
@@ -48,6 +48,7 @@ else:
 BACKGROUND = _settings_conf["background"]
 TEXTCOLOR = _settings_conf["textcolor"]
 FONTFAMILY = _settings_conf["fontfamily"]
+LINESPACING = _settings_conf["line-spacing"]
 MARGINS = _settings_conf["margins"]
 PAGEZOOM = _settings_conf["pagezoom"]
 TEXTALIGNMENT = _settings_conf["text-alignment"]
@@ -823,6 +824,14 @@ class dictMainWindow(QMainWindow):
                 self.text_edit.document().setDefaultStyleSheet(self.custom_css)
             #
             self.text_edit.setHtml(_tmp)
+            # set the line spacing
+            blockFmt = QTextBlockFormat()
+            # QTextBlockFormat::ProportionalHeight	1 - QTextBlockFormat::LineDistanceHeight	4
+            blockFmt.setLineHeight(LINESPACING, 1)#QTextBlockFormat.LineHeightTypes.ProportionalHeight)
+            theCursor = self.text_edit.textCursor()
+            theCursor.clearSelection()
+            theCursor.select(QTextCursor.SelectionType.Document)
+            theCursor.mergeBlockFormat(blockFmt)
             #
             self.text_edit.verticalScrollBar().setSliderPosition(0)
             if TEXTALIGNMENT == 1:
@@ -1202,6 +1211,14 @@ class confWin(QDialog):
         self._font_family.setToolTip("Font family name, e.g. Serif or Sans\nLeave empty for the default font")
         pform.addRow("Font family ", self._font_family)
         #
+        self._line_spacing = QSpinBox()
+        self._line_spacing.setMinimum(100)
+        self._line_spacing.setMaximum(1000)
+        self._line_spacing.setSingleStep(10)
+        self._line_spacing.setValue(LINESPACING)
+        self._line_spacing.setToolTip("100% is the default value.")
+        pform.addRow("Line spacing ", self._line_spacing)
+        #
         self._margins = QSpinBox()
         self._margins.setMaximum(1000)
         self._margins.setValue(MARGINS)
@@ -1273,6 +1290,7 @@ class confWin(QDialog):
         global BACKGROUND
         global TEXTCOLOR
         global FONTFAMILY
+        global LINESPACING
         global MARGINS
         global PAGEZOOM
         global TEXTALIGNMENT
@@ -1290,6 +1308,8 @@ class confWin(QDialog):
             _settings_conf["textcolor"] = TEXTCOLOR
             FONTFAMILY = self._font_family.text()
             _settings_conf["fontfamily"] = FONTFAMILY
+            LINESPACING = self._line_spacing.value()
+            _settings_conf["line-spacing"] = LINESPACING
             MARGINS = self._margins.value()
             _settings_conf["margins"] = MARGINS
             _starting_zoom = PAGEZOOM
@@ -1321,6 +1341,15 @@ class confWin(QDialog):
                 _font = self.window.text_edit.font()
                 _font.setFamily(FONTFAMILY)
                 self.window.text_edit.setFont(_font)
+            if LINESPACING:
+                # set the line spacing
+                blockFmt = QTextBlockFormat()
+                # QTextBlockFormat::ProportionalHeight	1 - QTextBlockFormat::LineDistanceHeight	4
+                blockFmt.setLineHeight(LINESPACING, 1)#QTextBlockFormat.LineHeightTypes.ProportionalHeight)
+                theCursor = self.window.text_edit.textCursor()
+                theCursor.clearSelection()
+                theCursor.select(QTextCursor.SelectionType.Document)
+                theCursor.mergeBlockFormat(blockFmt)
             if MARGINS:
                 self.window.text_edit.document().setDocumentMargin(MARGINS)
             if (PAGEZOOM-_starting_zoom) > 0:
@@ -1358,5 +1387,6 @@ class MyDialog(QMessageBox):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    QGuiApplication.setDesktopFileName("epubreader")
     myGUI = dictMainWindow()
     sys.exit(app.exec())
