@@ -19,7 +19,7 @@ Features:
 - custom stylesheet (overrides the epub stylesheets)
 - printing (of the current chapter)
 - basic epub info
-- custom background colour, text colour, margins, initial zoom level, line spacing (in the cfgCfg.py)
+- custom background colour, text colour, margins, initial zoom level, line spacing
 - clickable ebook links (not external links)
 - the window size is stored
 - custom scripts on selected text: a sample script is shipped: searching for a meaning of a word with Wordnet; the command line wn and yad are required
