@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.3.3
+# V. 0.4
 
 import sys, os, json
 from subprocess import Popen
@@ -404,9 +404,9 @@ class dictMainWindow(QMainWindow):
             #
             if self._opf_file:
                 _parse_epub_data(self._opf_file)
-                if USE_STYLESHEET == 1:
+                if USE_STYLESHEET == 1 or USE_STYLESHEET == 2:
                     self._parse_epub_css(self._opf_file)
-                elif USE_STYLESHEET == 2:
+                elif USE_STYLESHEET == 3:
                     self.custom_css = ""
                     self.parse_custom_css()
                 #
@@ -800,7 +800,7 @@ class dictMainWindow(QMainWindow):
                 _tmp = _ret
             # replace the css path with its full path
             _css_full_path = None
-            if USE_STYLESHEET == 1:
+            if USE_STYLESHEET == 1 or USE_STYLESHEET == 2:
                 _ret = self.replace_text_css(_tmp)
                 if _ret != None:
                     _tmp = _ret[0]
@@ -817,10 +817,17 @@ class dictMainWindow(QMainWindow):
             _tmp = self.unquote_href(_tmp)
             # self.text_edit.setHtml(_tmp)
             #
+            # use the default stylesheet(s)
             if USE_STYLESHEET == 1 and _css_full_path != None:
                 _css_text = self.input_zip.read(_css_full_path.filename).decode()
                 self.text_edit.document().setDefaultStyleSheet(_css_text)
-            elif USE_STYLESHEET == 2:
+            # use the default stylesheet(s) but set the font-size property to 1em (libreoffice workaround)
+            elif USE_STYLESHEET == 2 and _css_full_path != None:
+                _css_text = self.input_zip.read(_css_full_path.filename).decode()
+                new_css_text = self.css_replace_font(_css_text)
+                self.text_edit.document().setDefaultStyleSheet(new_css_text)
+            # custom stylesheet
+            elif USE_STYLESHEET == 3:
                 self.text_edit.document().setDefaultStyleSheet(self.custom_css)
             #
             self.text_edit.setHtml(_tmp)
@@ -1020,11 +1027,29 @@ class dictMainWindow(QMainWindow):
                 new_text = new_text.replace(_tmp, unquote(_tmp))
                 _pos = _text.find('href="', _pos_end+1)
         except Exception as E:
-            MyDialog("Error", str(E), self)
+            # MyDialog("Error", str(E), self)
             return _text
         #
         return new_text
             
+    # replace font-size: xxpt; with font-size: 1em;
+    def css_replace_font(self, _text):
+        new_text = _text
+        i = 1
+        try:
+            _pos = _text.find('font-size')
+            while _pos != -1:
+                _pos2 = _text.find(';',_pos)
+                _tmp = _text[_pos:_pos2+1]
+                if "pt" in _tmp:
+                    new_text = new_text.replace(_tmp, "font-size: 1em;")
+                    i += 1
+                _pos = _text.find('font-size', _pos2+1)
+        except Exception as E:
+            # MyDialog("Error", str(E), self)
+            return _text
+        #
+        return new_text
     
     # load and display the page
     def _load_data(self):
@@ -1046,7 +1071,8 @@ class dictMainWindow(QMainWindow):
                     _img1 = _img1.scaledToWidth(int(self.text_edit.document().size().width()-self.text_edit.document().documentMargin()*2), Qt.TransformationMode.SmoothTransformation)
                 self.text_edit.document().addResource(QTextDocument.ResourceType.ImageResource, QUrl(_img_name), _img1)
         except Exception as E:
-            MyDialog("Error", str(E), self)
+            # MyDialog("Error", str(E), self)
+            pass
         #
         # fonts
         if USE_EMBEDDED_FONT:
@@ -1055,7 +1081,8 @@ class dictMainWindow(QMainWindow):
                     # self.text_edit.document().addResource(QTextDocument.ResourceType.UserResource, QUrl(el), QVariant(el))
                     self.text_edit.document().addResource(QTextDocument.ResourceType.UnknownResource, QUrl(el), QVariant(el))
             except Exception as E:
-                MyDialog("Error", str(E), self)
+                # MyDialog("Error", str(E), self)
+                pass
         #### useless
         # # css
         # if USE_STYLESHEET:
@@ -1230,8 +1257,9 @@ class confWin(QDialog):
         pform.addRow("Page zoom ", self._page_zoom)
         #
         self._stylesheet = QComboBox()
-        self._stylesheet.addItems(["No", "Yes", "Custom"])
+        self._stylesheet.addItems(["No", "Yes", "Yes (no fonts)", "Custom"])
         self._stylesheet.setCurrentIndex(USE_STYLESHEET)
+        self._stylesheet.setToolTip("Yes (no fonts):\nthe font-size property in points\nwill be replaced with the default 1em.\nThis is a LibreOffice ebook exporter workaround\nneeded by this application\nto change the font size properly.")
         pform.addRow("Use the book stylesheets ", self._stylesheet)
         #
         self._fonts = QComboBox()
