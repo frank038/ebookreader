@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# V. 0.4
+# V. 0.4.1
 
 import sys, os, json
 from subprocess import Popen
@@ -483,8 +483,12 @@ class dictMainWindow(QMainWindow):
                 if i == 2000:
                     break
                 end_pos = _page.find('">', start_pos)
+                if end_pos == -1:
+                     break
                 file_name = _page[start_pos+9:end_pos]
                 end_pos2 = _page.find('</a>', end_pos)
+                if end_pos2 == -1:
+                     break
                 page_name = _page[end_pos+2:end_pos2]
                 self.toc_list[file_name] = page_name
                 start_pos = _page.find('<a href="', start_pos+9)
@@ -878,6 +882,8 @@ class dictMainWindow(QMainWindow):
             if _img_name in new_text:
                 _pos = new_text.find(_img_name)
                 _pos_end = new_text.find('"', _pos)
+                if _pos_end == -1:
+                    continue
                 _pos_start = None
                 i = 1
                 while 1:
@@ -927,6 +933,8 @@ class dictMainWindow(QMainWindow):
                 _img_name = _parse.quote(_img_name)
                 _pos = new_text.find(_img_name)
                 _pos_end = new_text.find('"', _pos)
+                if _pos_end == -1:
+                    continue
                 _pos_start = None
                 i = 1
                 while 1:
@@ -992,6 +1000,8 @@ class dictMainWindow(QMainWindow):
                 if _css_name in _text:
                     _pos = _text.find(_css_name)
                     _pos_end = _text.find('"', _pos)
+                    if _pos_end == -1:
+                        continue
                     _pos_start = None
                     i = 1
                     while 1:
@@ -1023,6 +1033,8 @@ class dictMainWindow(QMainWindow):
             while _pos != -1:
                 _pos2 = _text.find('"',_pos)
                 _pos_end = _text.find('"', _pos2+1)
+                if _pos_end == -1:
+                    break
                 _tmp = _text[_pos:_pos_end]
                 new_text = new_text.replace(_tmp, unquote(_tmp))
                 _pos = _text.find('href="', _pos_end+1)
@@ -1040,6 +1052,8 @@ class dictMainWindow(QMainWindow):
             _pos = _text.find('font-size')
             while _pos != -1:
                 _pos2 = _text.find(';',_pos)
+                if _pos2 == -1:
+                    break
                 _tmp = _text[_pos:_pos2+1]
                 if "pt" in _tmp:
                     new_text = new_text.replace(_tmp, "font-size: 1em;")
